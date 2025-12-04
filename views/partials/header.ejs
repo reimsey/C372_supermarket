@@ -1,0 +1,77 @@
+<!-- views/partials/header.ejs -->
+<!-- Global theme links -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="/styles.css" rel="stylesheet">
+
+<nav class="navbar navbar-expand-sm navbar-dark mb-4">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="/"><strong>Jolin's Supermarket</strong></a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="mainNavbar">
+      <ul class="navbar-nav me-auto">
+        <% if (!user) { %>
+          <% if (!(typeof showHelp !== 'undefined' && showHelp)) { %>
+            <!-- Not logged in: show Register / Login -->
+            <li class="nav-item">
+              <a class="nav-link" href="/register">Register</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/login">Login</a>
+            </li>
+          <% } %>
+
+        <% } else if (user.role === 'user') { %>
+          <!-- Normal customer -->
+          <li class="nav-item">
+            <a class="nav-link" href="/shopping">Shop</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/cart">View Cart</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/purchase-history">Purchase History</a>
+          </li>
+
+        <% } else if (user.role === 'admin') { %>
+          <!-- Admin -->
+          <li class="nav-item">
+            <a class="nav-link" href="/inventory">Inventory</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/addProduct">Add Product</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/admin/history">User Purchase History</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/admin/view-signup">View Sign Ups</a>
+          </li>
+        <% } %>
+      </ul>
+
+      <div class="d-flex align-items-center ms-auto">
+        <% if (typeof showHelp !== 'undefined' && showHelp) { %>
+          <a class="btn btn-outline-light btn-sm" href="/help">Help</a>
+        <% } %>
+
+        <% if (user) { %>
+          <!-- Right side: user info + logout -->
+          <span class="navbar-text ms-3">
+            Logged in as <strong><%= user.username %></strong> (<%= user.role %>)
+          </span>
+          <ul class="navbar-nav ms-3">
+            <li class="nav-item">
+              <a class="nav-link" href="/logout">Logout</a>
+            </li>
+          </ul>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</nav>

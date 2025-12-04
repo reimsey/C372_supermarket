@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Payment Methods</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="/styles.css" rel="stylesheet">
+</head>
+<body>
+<%- include('partials/header') %>
+
+<div class="container mt-4" style="max-width: 780px;">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="mb-0">Payment Methods</h3>
+      <p class="text-muted mb-0">Simulated only — no real payments.</p>
+    </div>
+    <a href="/cart" class="btn btn-outline-secondary btn-sm">Back to Cart</a>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Add New Method</h5>
+      <form action="/payment-methods" method="POST" class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Method Name</label>
+          <input type="text" name="methodName" class="form-control" placeholder="Visa, Mastercard..." required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Card Number</label>
+          <input type="text" name="cardNumber" class="form-control" placeholder="**** 1234" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Expire Date</label>
+          <input type="text" name="expireDate" class="form-control" placeholder="12/35" required>
+        </div>
+        <div class="col-12">
+          <button type="submit" class="btn btn-primary">Add Method</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <h5 class="mb-3">Saved Methods</h5>
+  <% if (!methods || methods.length === 0) { %>
+    <div class="alert alert-info">No payment methods saved yet.</div>
+  <% } else { %>
+    <div class="list-group">
+      <% methods.forEach(m => { %>
+        <div class="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+          <div>
+            <div class="fw-semibold"><%= m.methodName %> <span class="text-muted"><%= m.cardNumber || m.maskedDetails %></span></div>
+            <div class="small text-muted">Expires: <%= m.expireDate %></div>
+          </div>
+          <div class="d-flex gap-2 mt-2 mt-md-0">
+            <form action="/payment-methods/<%= m.id %>/update" method="POST" class="d-flex gap-2">
+              <input type="text" name="methodName" class="form-control form-control-sm" value="<%= m.methodName %>" required>
+              <input type="text" name="cardNumber" class="form-control form-control-sm" value="<%= m.cardNumber || m.maskedDetails %>" required>
+              <input type="text" name="expireDate" class="form-control form-control-sm" value="<%= m.expireDate %>" required>
+              <button class="btn btn-outline-secondary btn-sm" type="submit">Update</button>
+            </form>
+            <form action="/payment-methods/<%= m.id %>/delete" method="POST" onsubmit="return confirm('Delete this payment method?');">
+              <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+            </form>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+</div>
+</body>
+</html>

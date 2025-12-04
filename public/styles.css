@@ -1,0 +1,109 @@
+:root {
+  --primary: #6F9B5A;
+  --accent: #F2C94C;
+  --neutral: #5A525A;
+  --bg: #C1D3B9;
+  --surface: #ffffff;
+  --shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Work Sans', Arial, sans-serif;
+  background: var(--bg);
+  color: var(--neutral);
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Raleway', 'Work Sans', Arial, sans-serif;
+  color: var(--neutral);
+  font-weight: 700;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+a:hover {
+  color: #4f7443;
+}
+
+.navbar {
+  background: var(--primary) !important;
+  box-shadow: var(--shadow);
+}
+
+.navbar-brand, .nav-link, .navbar-text {
+  color: #fff !important;
+}
+
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.btn-primary:hover {
+  background: #5a8048;
+  border-color: #5a8048;
+}
+
+.btn-secondary {
+  background: var(--neutral);
+  border-color: var(--neutral);
+}
+
+.btn-secondary:hover {
+  background: #463f46;
+  border-color: #463f46;
+}
+
+.btn-outline-secondary {
+  color: var(--neutral);
+  border-color: var(--neutral);
+}
+
+.btn-outline-secondary:hover {
+  color: #fff;
+  background: var(--neutral);
+}
+
+.card, .table {
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  border: none;
+  border-radius: 12px;
+}
+
+.table thead th {
+  background: #eef4e8;
+  color: var(--neutral);
+  border: none;
+}
+
+.table td, .table th {
+  vertical-align: middle;
+}
+
+.form-control, .form-select {
+  border-radius: 10px;
+  border: 1px solid #d8e4d1;
+}
+
+.badge-accent {
+  background: var(--accent);
+  color: var(--neutral);
+}
+
+.pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef4e8;
+  color: var(--neutral);
+  font-size: 0.85rem;
+}
