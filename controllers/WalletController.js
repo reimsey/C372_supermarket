@@ -1,0 +1,99 @@
+const Wallet = require('../models/Wallet');
+const Receipt = require('../models/Receipt');
+
+module.exports = {
+  showWallet(req, res) {
+    if (!req.session.user) return res.redirect('/login');
+    const userId = req.session.user.id;
+
+    Wallet.getBalance(userId, (balErr, balance) => {
+      if (balErr) return res.status(500).send('Error loading wallet');
+      Wallet.listLedger(userId, 25, (ledgerErr, ledger) => {
+        if (ledgerErr) return res.status(500).send('Error loading wallet history');
+        res.render('wallet', {
+          user: req.session.user,
+          balance: Number(balance) || 0,
+          ledger: ledger || [],
+          messages: req.flash('success'),
+          errors: req.flash('error')
+        });
+      });
+    });
+  },
+
+  topUp(req, res) {
+    if (!req.session.user) return res.redirect('/login');
+    const userId = req.session.user.id;
+    const amount = req.body.amount;
+
+    Wallet.credit(
+      userId,
+      amount,
+      { type: 'topup', reference_type: 'wallet_topup', note: 'Wallet top-up' },
+      (err) => {
+        if (err) {
+          req.flash('error', err.message || 'Top-up failed');
+          return res.redirect('/wallet');
+        }
+        req.flash('success', 'Top-up successful');
+        res.redirect('/wallet');
+      }
+    );
+  },
+
+  refundToWallet(req, res) {
+    if (!req.session.user) return res.redirect('/login');
+    const receiptId = req.body.receipt_id;
+    const note = req.body.note || 'Refund to wallet';
+
+    if (!receiptId) {
+      req.flash('error', 'Missing receipt for refund');
+      return res.redirect('/admin/history');
+    }
+
+    Receipt.getByReceiptId(receiptId, (err, data) => {
+      if (err) {
+        req.flash('error', 'Error loading receipt');
+        return res.redirect('/admin/history');
+      }
+      if (!data) {
+        req.flash('error', 'Receipt not found');
+        return res.redirect('/admin/history');
+      }
+
+      const receipt = data.receipt;
+      if (Number(receipt.refunded_amount) > 0) {
+        req.flash('error', `Already refunded $${Number(receipt.refunded_amount).toFixed(2)}`);
+        return res.redirect('/admin/history');
+      }
+
+      const amount = Number(receipt.final_total) || 0;
+      const userId = receipt.userId;
+
+      Wallet.credit(
+        userId,
+        amount,
+        { type: 'refund', reference_type: 'receipt_refund', reference_id: receiptId, note },
+        (creditErr) => {
+          if (creditErr) {
+            const msg = creditErr.code === 'ER_DUP_ENTRY' ? 'Already refunded' : (creditErr.message || 'Refund failed');
+            req.flash('error', msg);
+            return res.redirect('/admin/history');
+          }
+          Receipt.markRefunded(receiptId, req.session.user.id, amount, (markErr, result) => {
+            if (markErr) {
+              req.flash('error', markErr.message || 'Refund recorded failed');
+              return res.redirect('/admin/history');
+            }
+            if (!result || result.affectedRows === 0) {
+              req.flash('error', 'Already refunded');
+              return res.redirect('/admin/history');
+            }
+            req.flash('success', 'Refund sent to wallet');
+            res.redirect('/admin/history');
+          });
+        }
+      );
+    });
+  }
+};

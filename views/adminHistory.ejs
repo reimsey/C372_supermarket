@@ -36,6 +36,20 @@
                             <div class="fw-bold">Purchase Date:</div>
                             <div><%= purchase.date?.toLocaleString ? purchase.date.toLocaleString() : purchase.date %></div>
                             <div class="fw-bold mt-2">Total: $<%= purchase.total.toFixed(2) %></div>
+                            <% if (purchase.receipt_id) { %>
+                                <div class="mt-2">
+                                    <a class="btn btn-sm btn-outline-primary" href="/receipt/<%= purchase.receipt_id %>">View Receipt</a>
+                                </div>
+                                <% if ((purchase.refunded_amount || 0) > 0) { %>
+                                    <div class="small text-muted mt-2">Amount refunded: $<%= purchase.refunded_amount.toFixed(2) %></div>
+                                <% } else { %>
+                                    <form action="/wallet/refund" method="POST" class="mt-2">
+                                        <input type="hidden" name="receipt_id" value="<%= purchase.receipt_id %>">
+                                        <input type="hidden" name="note" value="Order refund">
+                                        <button type="submit" class="btn btn-sm btn-outline-warning">Refund to Wallet</button>
+                                    </form>
+                                <% } %>
+                            <% } %>
                         </div>
                     </div>
                     <div class="table-responsive">

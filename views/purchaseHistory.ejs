@@ -27,6 +27,9 @@
                                 <div class="fw-bold">Purchase Date:</div>
                                 <div><%= purchase.date.toLocaleString ? purchase.date.toLocaleString() : purchase.date %></div>
                                 <div class="small text-muted">Payment: <%= purchase.paymentMethod || 'N/A' %></div>
+                                <% if (purchase.receipt_id) { %>
+                                    <div class="small"><a href="/receipt/<%= purchase.receipt_id %>">View Receipt</a></div>
+                                <% } %>
                             </div>
                             <div class="text-end">
                                 <div class="fw-bold">Total:</div>

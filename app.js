@@ -13,6 +13,8 @@ const CartController = require('./controllers/CartController');
 const OrderController = require('./controllers/OrderController');
 const PaymentMethodController = require('./controllers/PaymentMethodController');
 const AdminController = require('./controllers/AdminController');
+const WalletController = require('./controllers/WalletController');
+const ReceiptController = require('./controllers/ReceiptController');
 
 // Multer config
 const storage = multer.diskStorage({
@@ -151,6 +153,11 @@ app.get('/payment-methods', checkAuthenticated, PaymentMethodController.list);
 app.post('/payment-methods', checkAuthenticated, PaymentMethodController.add);
 app.post('/payment-methods/:id/update', checkAuthenticated, PaymentMethodController.update);
 app.post('/payment-methods/:id/delete', checkAuthenticated, PaymentMethodController.remove);
+app.get('/wallet', checkAuthenticated, WalletController.showWallet);
+app.post('/wallet/topup', checkAuthenticated, WalletController.topUp);
+app.post('/wallet/refund', checkAuthenticated, checkAdmin, WalletController.refundToWallet);
+app.get('/receipt/:receiptId', checkAuthenticated, ReceiptController.viewReceipt);
+app.get('/receipt/:receiptId/pdf', checkAuthenticated, ReceiptController.downloadPdf);
 
 // Admin
 app.get('/admin/history', checkAuthenticated, checkAdmin, OrderController.adminViewHistory);
