@@ -1,6 +1,7 @@
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const Wallet = require('../models/Wallet');
+const discountService = require('../services/discounts');
 
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
@@ -29,11 +30,33 @@ module.exports = {
       });
     });
   },
-  viewCart(req, res) {
+  async viewCart(req, res) {
     if (!req.session.user) return res.redirect('/login');
-    Cart.getItemsByUser(req.session.user.id, (err, items) => {
+    Cart.getItemsByUser(req.session.user.id, async (err, items) => {
       if (err) console.error('Error loading cart:', err);
       const subtotal = computeSubtotalFromCart(items);
+      const appliedCodes = req.session.appliedDiscountCodes || [];
+
+      let discountSummary = {
+        subtotal,
+        applied: [],
+        autoApplied: null,
+        totalDiscount: 0,
+        finalTotal: subtotal,
+        errors: []
+      };
+
+      try {
+        discountSummary = await discountService.evaluateCartDiscounts(req.session.user.id, items || [], appliedCodes);
+      } catch (discountErr) {
+        console.error('Error evaluating discounts:', discountErr);
+      }
+
+      req.session.appliedDiscountCodes = discountSummary.applied.map(item => item.code);
+      if (discountSummary.errors && discountSummary.errors.length > 0) {
+        req.flash('error', discountSummary.errors.join(' '));
+      }
+
       Wallet.getBalance(req.session.user.id, (balErr, balance) => {
         if (balErr) console.error('Error loading wallet balance:', balErr);
         res.render('cart', {
@@ -42,6 +65,8 @@ module.exports = {
           paymentMethods: req.paymentMethods || [],
           walletBalance: roundMoney(balance || 0),
           cartSubtotal: subtotal,
+          discountSummary,
+          appliedCodes: req.session.appliedDiscountCodes || [],
           messages: req.flash('success'),
           errors: req.flash('error')
         });

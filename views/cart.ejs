@@ -25,69 +25,151 @@
     <% if (cart.length === 0) { %>
       <p>Your cart is empty.</p>
     <% } else { %>
-      <table class="table table-bordered">
-        <thead>
-          <tr>
-            <th>Product</th>
-            <th>Price</th>
-            <th>Quantity</th>
-            <th>Total</th>
-            <th>Remove</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% let total = 0; %>
-          <% for (let i = 0; i < cart.length; i++) { %>
-            <tr>
-                <td><%= cart[i].productName %></td>
-                <td><img src="/images/<%= cart[i].image %>" width="80" class="img-thumbnail"></td>
-                <td><%= cart[i].quantity %></td>
-                <td>$<%= (cart[i].price * cart[i].quantity).toFixed(2) %></td>
-                <td>
-                  <form action="/cart/remove/<%= cart[i].productId %>" method="POST" onsubmit="return confirm('Remove this item?');" class="d-inline">
-                    <button type="submit" class="btn btn-sm btn-danger">Remove</button>
-                  </form>
-                </td>
-            </tr>
-            <% total += cart[i].price * cart[i].quantity; %>
-          <% }; %>
-        </tbody>
-      </table>
-      <h4>Total: $<%= total.toFixed(2) %></h4>
-
-      <form action="/purchase" method="POST" class="mt-3">
-        <div class="card mb-3">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h5 class="mb-0">Payment Method</h5>
-              <a href="/payment-methods" class="btn btn-outline-secondary btn-sm">Manage Methods</a>
-            </div>
-            <div class="form-check mb-2">
-              <input class="form-check-input" type="checkbox" name="payWithWallet" id="payWithWallet" value="1" <%= (walletBalance || 0) >= (cartSubtotal || 0) ? '' : 'disabled' %>>
-              <label class="form-check-label" for="payWithWallet">
-                Pay with wallet (Balance: $<%= (walletBalance || 0).toFixed(2) %>)
-              </label>
-              <% if ((walletBalance || 0) < (cartSubtotal || 0)) { %>
-                <div class="small text-muted">Insufficient balance for this cart total.</div>
+      <div class="row g-4">
+        <div class="col-lg-7">
+          <table class="table table-bordered">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Price</th>
+                <th>Quantity</th>
+                <th>Total</th>
+                <th>Remove</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% let total = 0; %>
+              <% for (let i = 0; i < cart.length; i++) { %>
+                <tr>
+                    <td><%= cart[i].productName %></td>
+                    <td><img src="/images/<%= cart[i].image %>" width="80" class="img-thumbnail"></td>
+                    <td><%= cart[i].quantity %></td>
+                    <td>$<%= (cart[i].price * cart[i].quantity).toFixed(2) %></td>
+                    <td>
+                      <form action="/cart/remove/<%= cart[i].productId %>" method="POST" onsubmit="return confirm('Remove this item?');" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+                      </form>
+                    </td>
+                </tr>
+                <% total += cart[i].price * cart[i].quantity; %>
+              <% }; %>
+            </tbody>
+          </table>
+        </div>
+        <div class="col-lg-5">
+          <div class="card mb-3">
+            <div class="card-body">
+              <h5 class="mb-3">Order Summary</h5>
+              <div class="small">
+                <% cart.forEach(function(item) { %>
+                  <div class="d-flex justify-content-between">
+                    <div><%= item.productName %> x<%= item.quantity %></div>
+                    <div>$<%= (item.price * item.quantity).toFixed(2) %></div>
+                  </div>
+                <% }) %>
+              </div>
+              <hr>
+              <div class="d-flex justify-content-between">
+                <div>Subtotal</div>
+                <div>$<%= total.toFixed(2) %></div>
+              </div>
+              <div class="d-flex justify-content-between text-muted">
+                <div>Discounts</div>
+                <div>-$<%= (discountSummary?.totalDiscount || 0).toFixed(2) %></div>
+              </div>
+              <div class="d-flex justify-content-between fw-semibold mt-2">
+                <div>Total</div>
+                <div>$<span id="cartTotal" data-total="<%= (discountSummary?.finalTotal || total).toFixed(2) %>"><%= (discountSummary?.finalTotal || total).toFixed(2) %></span></div>
+              </div>
+              <% if ((discountSummary?.applied || []).length > 0 || discountSummary?.autoApplied) { %>
+                <div class="small text-muted mt-2">
+                  <% (discountSummary.applied || []).forEach(function(item) { %>
+                    <div><%= item.code %>: -$<%= Number(item.amount).toFixed(2) %></div>
+                  <% }) %>
+                  <% if (discountSummary.autoApplied) { %>
+                    <div>Auto-applied: <%= discountSummary.autoApplied.code %></div>
+                  <% } %>
+                </div>
               <% } %>
             </div>
-            <% if (paymentMethods && paymentMethods.length > 0) { %>
-              <% paymentMethods.forEach(function(pm, idx) { %>
-                <div class="form-check">
-                  <input class="form-check-input" type="radio" name="paymentMethodId" id="pm-<%= pm.id %>" value="<%= pm.id %>" <%= idx === 0 ? 'checked' : '' %>>
-                  <label class="form-check-label" for="pm-<%= pm.id %>">
-                    <%= pm.methodName %> <span class="text-muted"><%= pm.cardNumber || pm.maskedDetails %></span> (Exp: <%= pm.expireDate %>)
-                  </label>
-                </div>
-              <% }); %>
-            <% } else { %>
-              <p class="text-muted mb-0">No saved methods. Defaulting to Pay on Delivery.</p>
-              <input type="hidden" name="paymentMethodLabel" value="Pay on Delivery">
-            <% } %>
           </div>
         </div>
-        <button type="submit" class="btn btn-primary">Purchase All</button>
-      </form>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">Payment Options</h5>
+          </div>
+
+          <div class="border rounded p-3 mb-3">
+            <div class="fw-semibold mb-2">Vouchers & Coupons</div>
+            <form action="/cart/discounts/apply" method="POST" class="d-flex gap-2">
+              <input type="text" name="code" class="form-control" placeholder="Enter code">
+              <button type="submit" class="btn btn-outline-primary">Apply</button>
+            </form>
+            <% if ((discountSummary?.applied || []).length > 0 || discountSummary?.autoApplied) { %>
+              <div class="mt-2 small">
+                <% (discountSummary.applied || []).forEach(function(item) { %>
+                  <div class="d-flex align-items-center justify-content-between">
+                    <div><strong><%= item.code %></strong> -$<%= Number(item.amount).toFixed(2) %></div>
+                    <form action="/cart/discounts/remove" method="POST" class="ms-2">
+                      <input type="hidden" name="code" value="<%= item.code %>">
+                      <button type="submit" class="btn btn-link btn-sm">Remove</button>
+                    </form>
+                  </div>
+                <% }) %>
+                <% if (discountSummary.autoApplied) { %>
+                  <div class="text-muted">Auto-applied: <strong><%= discountSummary.autoApplied.code %></strong> -$<%= Number(discountSummary.autoApplied.amount).toFixed(2) %></div>
+                <% } %>
+              </div>
+            <% } else { %>
+              <div class="text-muted small mt-2">No discount applied.</div>
+            <% } %>
+          </div>
+
+          <form action="/purchase" method="POST" id="walletPurchaseForm">
+            <div class="border rounded p-3 mb-3">
+              <div class="fw-semibold mb-2">Digital Wallet</div>
+              <div class="d-flex align-items-center justify-content-between gap-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="payWithWallet" id="payWithWallet" value="1" <%= (walletBalance || 0) >= (discountSummary?.finalTotal || cartSubtotal || 0) ? '' : 'disabled' %>>
+                  <label class="form-check-label" for="payWithWallet">
+                    Pay with wallet (Balance: $<%= (walletBalance || 0).toFixed(2) %>)
+                  </label>
+                </div>
+                <% if ((walletBalance || 0) < (discountSummary?.finalTotal || cartSubtotal || 0)) { %>
+                  <a href="/wallet" class="btn btn-outline-primary btn-sm">Top up wallet</a>
+                <% } %>
+              </div>
+              <% if ((walletBalance || 0) < (discountSummary?.finalTotal || cartSubtotal || 0)) { %>
+                <div class="small text-muted mt-1">Insufficient balance for this cart total.</div>
+              <% } %>
+            </div>
+
+            <div id="payment-choice-error" class="text-danger small mb-2 d-none"></div>
+            <button type="submit" class="btn btn-primary" id="walletPurchaseBtn">Pay with Wallet</button>
+          </form>
+
+          <div class="border rounded p-3 mt-4">
+            <div class="fw-semibold mb-2">PayPal</div>
+            <div id="paypal-button-container"></div>
+            <div id="paypal-error" class="text-danger small mt-2 d-none"></div>
+          </div>
+
+          <div class="border rounded p-3 mt-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <div class="fw-semibold">NETS QR</div>
+              <img src="/images/netsQrLogo.png" alt="NETS" width="64" height="32">
+            </div>
+            <p class="text-muted mb-3">Scan a NETS QR code with your bank app to complete payment.</p>
+            <form action="/nets/create-order" method="POST">
+              <input type="hidden" name="cartTotal" value="<%= total.toFixed(2) %>">
+              <button type="submit" class="btn btn-success">Generate NETS QR</button>
+            </form>
+          </div>
+        </div>
+      </div>
 
       <div class="mt-4">
         <a href="/shopping" class="btn btn-secondary">Back to Shopping</a>
@@ -95,5 +177,95 @@
       
     <% } %>
   </div>
+
+  <% if (cart.length > 0) { %>
+    <script src="https://www.paypal.com/sdk/js?client-id=<%= process.env.PAYPAL_CLIENT_ID %>&currency=<%= process.env.PAYPAL_CURRENCY || 'SGD' %>"></script>
+    <script>
+      const cartItems = <%- JSON.stringify(cart.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity
+      }))) %>;
+      const totalEl = document.querySelector('#cartTotal');
+      const cartTotal = Number(totalEl?.dataset?.total || totalEl?.textContent || 0);
+      const errorEl = document.querySelector('#paypal-error');
+
+      const showPaypalError = (message) => {
+        if (!errorEl) return;
+        errorEl.textContent = message;
+        errorEl.classList.remove('d-none');
+      };
+
+      const walletCheckbox = document.querySelector('#payWithWallet');
+      const walletForm = document.querySelector('#walletPurchaseForm');
+      const paymentChoiceError = document.querySelector('#payment-choice-error');
+
+      if (walletForm) {
+        walletForm.addEventListener('submit', (event) => {
+          if (!walletCheckbox || !walletCheckbox.checked) {
+            event.preventDefault();
+            if (paymentChoiceError) {
+              paymentChoiceError.textContent = 'Please select a payment method (Wallet, PayPal, or NETS).';
+              paymentChoiceError.classList.remove('d-none');
+            }
+          }
+        });
+      }
+
+      paypal.Buttons({
+        onClick: (data, actions) => {
+          if (!cartItems.length) {
+            showPaypalError('Your cart is empty.');
+            return actions.reject();
+          }
+          return actions.resolve();
+        },
+        createOrder: () => {
+          return fetch('/paypal/create-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              cartItemIds: cartItems.map(item => item.productId),
+              total: cartTotal
+            })
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data && data.id) return data.id;
+              throw new Error(data.message || 'Unable to create PayPal order');
+            })
+            .catch(err => {
+              showPaypalError(err.message || 'Unable to create PayPal order');
+              throw err;
+            });
+        },
+        onApprove: (data) => {
+          return fetch('/paypal/capture-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderID: data.orderID,
+              cartItemIds: cartItems.map(item => item.productId)
+            })
+          })
+            .then(res => res.json())
+            .then(result => {
+              if (result && result.receiptUrl) {
+                window.location = result.receiptUrl;
+                return;
+              }
+              throw new Error(result.message || 'Payment completed, but redirect failed.');
+            })
+            .catch(err => {
+              showPaypalError(err.message || 'Unable to capture PayPal order');
+              throw err;
+            });
+        },
+        onError: (err) => {
+          console.error('PayPal error:', err);
+          showPaypalError('PayPal encountered an error. Please try again.');
+        }
+      }).render('#paypal-button-container');
+    </script>
+  <% } %>
 </body>
 </html>

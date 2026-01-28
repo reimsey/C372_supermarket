@@ -17,7 +17,8 @@ module.exports = {
       res.render('receipt', {
         user: req.session.user,
         receipt: data.receipt,
-        items: data.items
+        items: data.items,
+        discounts: data.discounts || []
       });
     });
   },
@@ -58,6 +59,12 @@ module.exports = {
 
       doc.text(`Subtotal: $${Number(data.receipt.subtotal).toFixed(2)}`);
       doc.text(`Discounts: -$${Number(data.receipt.discount_amount).toFixed(2)}`);
+      if (data.discounts && data.discounts.length > 0) {
+        doc.text('Discount Codes:', { underline: true });
+        data.discounts.forEach((discount) => {
+          doc.text(`${discount.code}: -$${Number(discount.discount_amount).toFixed(2)}`);
+        });
+      }
       doc.text(`Final Paid: $${Number(data.receipt.final_total).toFixed(2)}`, { underline: true });
 
       doc.end();

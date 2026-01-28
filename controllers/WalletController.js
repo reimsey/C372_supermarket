@@ -1,5 +1,6 @@
 const Wallet = require('../models/Wallet');
 const Receipt = require('../models/Receipt');
+const PaymentMethod = require('../models/PaymentMethod');
 
 module.exports = {
   showWallet(req, res) {
@@ -10,12 +11,20 @@ module.exports = {
       if (balErr) return res.status(500).send('Error loading wallet');
       Wallet.listLedger(userId, 25, (ledgerErr, ledger) => {
         if (ledgerErr) return res.status(500).send('Error loading wallet history');
-        res.render('wallet', {
-          user: req.session.user,
-          balance: Number(balance) || 0,
-          ledger: ledger || [],
-          messages: req.flash('success'),
-          errors: req.flash('error')
+        PaymentMethod.listByUser(userId, (pmErr, methods) => {
+          if (pmErr) return res.status(500).send('Error loading payment methods');
+          const messages = req.flash('success') || [];
+          const errors = req.flash('error') || [];
+          if (req.query.topup === 'success') messages.push('Wallet top-up successful');
+          if (req.query.topup === 'fail') errors.push('Wallet top-up failed');
+          res.render('wallet', {
+            user: req.session.user,
+            balance: Number(balance) || 0,
+            ledger: ledger || [],
+            paymentMethods: methods || [],
+            messages,
+            errors
+          });
         });
       });
     });
@@ -25,11 +34,12 @@ module.exports = {
     if (!req.session.user) return res.redirect('/login');
     const userId = req.session.user.id;
     const amount = req.body.amount;
+    const paymentMethodLabel = req.body.paymentMethodLabel || 'Saved payment method';
 
     Wallet.credit(
       userId,
       amount,
-      { type: 'topup', reference_type: 'wallet_topup', note: 'Wallet top-up' },
+      { type: 'topup', reference_type: 'wallet_topup', note: `Wallet top-up via ${paymentMethodLabel}` },
       (err) => {
         if (err) {
           req.flash('error', err.message || 'Top-up failed');

@@ -1,31 +1,48 @@
 const Order = require('../models/Order');
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
-const PaymentMethod = require('../models/PaymentMethod');
 const Wallet = require('../models/Wallet');
 const Receipt = require('../models/Receipt');
+const DiscountCode = require('../models/DiscountCode');
+const discountService = require('../services/discounts');
 const crypto = require('crypto');
 
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
 module.exports = {
-  purchase(req, res) {
+  async purchase(req, res) {
     if (!req.session.user) return res.redirect('/login');
     const userId = req.session.user.id;
-    const selectedMethodId = req.body.paymentMethodId ? parseInt(req.body.paymentMethodId, 10) : null;
-    const fallbackLabel = req.body.paymentMethodLabel || 'Pay on Delivery';
     const payWithWallet = req.body.payWithWallet === '1';
-    Cart.getItemsByUser(userId, (cartErr, cart) => {
+    Cart.getItemsByUser(userId, async (cartErr, cart) => {
       if (cartErr) return res.status(500).send('Error loading cart');
       if (!cart || cart.length === 0) return res.redirect('/cart');
+      if (!payWithWallet) {
+        req.flash('error', 'Please select Wallet payment or use PayPal/NETS.');
+        return res.redirect('/cart');
+      }
 
-      const subtotal = roundMoney(
-        cart.reduce((sum, item) => {
-          const price = Number(item.price) || 0;
-          const qty = Number(item.quantity) || 0;
-          return sum + price * qty;
-        }, 0)
-      );
+      let discountSummary = null;
+      try {
+        discountSummary = await discountService.evaluateCartDiscounts(
+          userId,
+          cart,
+          req.session.appliedDiscountCodes || []
+        );
+      } catch (discountErr) {
+        console.error('Discount evaluation error:', discountErr);
+        req.flash('error', 'Unable to apply vouchers right now.');
+        return res.redirect('/cart');
+      }
+
+      if (discountSummary.errors && discountSummary.errors.length > 0) {
+        req.flash('error', discountSummary.errors.join(' '));
+        return res.redirect('/cart');
+      }
+
+      const subtotal = discountSummary.subtotal;
+      const discountTotal = discountSummary.totalDiscount;
+      const finalTotal = discountSummary.finalTotal;
 
       const finalize = (paymentLabel) => {
         let remaining = cart.length;
@@ -36,20 +53,29 @@ module.exports = {
           receipt_id: receiptId,
           userId,
           subtotal,
-          discount_amount: 0,
-          final_total: subtotal,
+          discount_amount: discountTotal,
+          final_total: finalTotal,
           payment_method: paymentLabel
         };
 
-        Receipt.create(receiptHeader, (receiptErr) => {
+        Receipt.create(receiptHeader, async (receiptErr) => {
           if (receiptErr && !hasError) {
             hasError = true;
             return res.status(500).send('Error creating receipt');
           }
-          Receipt.addItems(receiptId, cart, (itemsErr) => {
+          Receipt.addItems(receiptId, cart, async (itemsErr) => {
             if (itemsErr && !hasError) {
               hasError = true;
               return res.status(500).send('Error saving receipt items');
+            }
+            try {
+              await DiscountCode.recordRedemptions(
+                userId,
+                receiptId,
+                discountSummary.applied.concat(discountSummary.autoApplied ? [discountSummary.autoApplied] : [])
+              );
+            } catch (redemptionErr) {
+              console.error('Error recording discount redemptions:', redemptionErr);
             }
           });
         });
@@ -78,6 +104,7 @@ module.exports = {
               if (remaining === 0 && !hasError) {
                 Cart.clear(userId, (clearErr) => {
                   if (clearErr) console.error('Error clearing cart:', clearErr);
+                  req.session.appliedDiscountCodes = [];
                   res.redirect(`/receipt/${receiptId}`);
                 });
               }
@@ -86,33 +113,18 @@ module.exports = {
         });
       };
 
-      const proceedPayment = (label) => {
-        if (!payWithWallet) return finalize(label);
-        Wallet.debit(
-          userId,
-          subtotal,
-          { type: 'purchase', reference_type: 'order', note: 'Wallet purchase' },
-          (walletErr) => {
-            if (walletErr) {
-              req.flash('error', walletErr.message || 'Wallet payment failed');
-              return res.redirect('/cart');
-            }
-            finalize('Wallet');
+      Wallet.debit(
+        userId,
+        finalTotal,
+        { type: 'purchase', reference_type: 'order', note: 'Wallet purchase' },
+        (walletErr) => {
+          if (walletErr) {
+            req.flash('error', walletErr.message || 'Wallet payment failed');
+            return res.redirect('/cart');
           }
-        );
-      };
-
-      if (selectedMethodId) {
-        PaymentMethod.listByUser(userId, (err, methods) => {
-          if (err) return res.status(500).send('Error processing payment method');
-          const chosen = (methods || []).find(m => m.id === selectedMethodId);
-          const number = chosen ? (chosen.cardNumber || chosen.maskedDetails || '') : '';
-          const label = chosen ? `${chosen.methodName} ${number}` : fallbackLabel;
-          proceedPayment(label);
-        });
-      } else {
-        proceedPayment(fallbackLabel);
-      }
+          finalize('Wallet');
+        }
+      );
     });
   },
   purchaseHistory(req, res) {

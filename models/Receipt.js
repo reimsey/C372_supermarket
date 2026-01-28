@@ -59,7 +59,16 @@ module.exports = {
       `;
       db.query(itemsSql, [receiptId], (itemsErr, items) => {
         if (itemsErr) return callback(itemsErr);
-        callback(null, { receipt, items, userId: receipt.userId });
+        const discountSql = `
+          SELECT code, discount_amount
+          FROM receipt_discounts
+          WHERE receipt_id = ?
+          ORDER BY id ASC
+        `;
+        db.query(discountSql, [receiptId], (discErr, discounts) => {
+          if (discErr) return callback(discErr);
+          callback(null, { receipt, items, discounts: discounts || [], userId: receipt.userId });
+        });
       });
     });
   },

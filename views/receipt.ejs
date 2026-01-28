@@ -65,6 +65,13 @@
     <div class="text-end">
       <div>Subtotal: $<%= Number(receipt.subtotal).toFixed(2) %></div>
       <div>Discounts: -$<%= Number(receipt.discount_amount).toFixed(2) %></div>
+      <% if (discounts && discounts.length > 0) { %>
+        <div class="small text-muted">
+          <% discounts.forEach(function(discount, idx) { %>
+            <div><%= discount.code %>: -$<%= Number(discount.discount_amount).toFixed(2) %></div>
+          <% }) %>
+        </div>
+      <% } %>
       <div class="fw-bold">Final Paid: $<%= Number(receipt.final_total).toFixed(2) %></div>
     </div>
   </div>

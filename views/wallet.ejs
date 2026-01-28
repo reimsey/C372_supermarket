@@ -34,15 +34,56 @@
     <div class="card mb-4">
       <div class="card-body">
         <h5 class="mb-3">Top-up Wallet</h5>
-        <form action="/wallet/topup" method="POST" class="row g-2">
+        <div class="row g-3">
           <div class="col-md-4">
-            <label class="form-label">Amount</label>
-            <input type="number" step="0.01" min="0.01" name="amount" class="form-control" required>
+            <label class="form-label" for="walletTopupAmount">Amount</label>
+            <input id="walletTopupAmount" type="number" step="0.01" min="0.01" class="form-control" required>
           </div>
           <div class="col-12">
-            <button type="submit" class="btn btn-primary">Top Up</button>
+            <label class="form-label">Choose Payment Method</label>
+            <div class="d-flex flex-column gap-2">
+              <% if (paymentMethods && paymentMethods.length > 0) { %>
+                <% paymentMethods.forEach(function(pm, idx) { %>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="walletPaymentChoice" id="wallet-pm-<%= pm.id %>" value="saved:<%= pm.id %>" data-label="<%= pm.methodName %> <%= pm.cardNumber || pm.maskedDetails %>" <%= idx === 0 ? 'checked' : '' %>>
+                    <label class="form-check-label" for="wallet-pm-<%= pm.id %>">
+                      <%= pm.methodName %> <span class="text-muted"><%= pm.cardNumber || pm.maskedDetails %></span> (Exp: <%= pm.expireDate %>)
+                    </label>
+                  </div>
+                <% }); %>
+              <% } else { %>
+                <div class="text-muted">No saved payment methods yet.</div>
+              <% } %>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="walletPaymentChoice" id="wallet-paypal" value="paypal">
+                <label class="form-check-label" for="wallet-paypal">PayPal</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="walletPaymentChoice" id="wallet-nets" value="nets">
+                <label class="form-check-label" for="wallet-nets">NETS QR</label>
+              </div>
+            </div>
           </div>
-        </form>
+          <div class="col-12">
+            <form id="walletSavedForm" action="/wallet/topup" method="POST" class="d-none">
+              <input type="hidden" name="amount" id="walletSavedAmount">
+              <input type="hidden" name="paymentMethodLabel" id="walletSavedLabel">
+            </form>
+            <form id="walletNetsForm" action="/wallet/nets/create-order" method="POST" class="d-none">
+              <input type="hidden" name="amount" id="walletNetsAmount">
+            </form>
+            <div id="walletSavedActions" class="d-none">
+              <button type="submit" form="walletSavedForm" class="btn btn-primary">Top Up</button>
+            </div>
+            <div id="walletPaypalActions" class="d-none">
+              <div id="wallet-paypal-button-container"></div>
+              <div id="wallet-paypal-error" class="text-danger small mt-2 d-none"></div>
+            </div>
+            <div id="walletNetsActions" class="d-none">
+              <button type="submit" form="walletNetsForm" class="btn btn-success">Generate NETS QR</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -76,5 +117,110 @@
       </div>
     <% } %>
   </div>
+
+  <script src="https://www.paypal.com/sdk/js?client-id=<%= process.env.PAYPAL_CLIENT_ID %>&currency=<%= process.env.PAYPAL_CURRENCY || 'SGD' %>"></script>
+  <script>
+    const amountInput = document.getElementById('walletTopupAmount');
+    const choiceInputs = document.querySelectorAll('input[name="walletPaymentChoice"]');
+    const savedActions = document.getElementById('walletSavedActions');
+    const paypalActions = document.getElementById('walletPaypalActions');
+    const netsActions = document.getElementById('walletNetsActions');
+    const savedAmount = document.getElementById('walletSavedAmount');
+    const savedLabel = document.getElementById('walletSavedLabel');
+    const netsAmount = document.getElementById('walletNetsAmount');
+    const paypalError = document.getElementById('wallet-paypal-error');
+
+    const getSelectedChoice = () => {
+      const selected = document.querySelector('input[name="walletPaymentChoice"]:checked');
+      return selected ? selected.value : '';
+    };
+
+    const setAmounts = () => {
+      const value = amountInput.value;
+      savedAmount.value = value;
+      netsAmount.value = value;
+      const selected = document.querySelector('input[name="walletPaymentChoice"]:checked');
+      savedLabel.value = selected?.dataset?.label || 'Saved payment method';
+    };
+
+    const toggleActions = () => {
+      const choice = getSelectedChoice();
+      savedActions.classList.toggle('d-none', !choice.startsWith('saved:'));
+      paypalActions.classList.toggle('d-none', choice !== 'paypal');
+      netsActions.classList.toggle('d-none', choice !== 'nets');
+    };
+
+    amountInput.addEventListener('input', setAmounts);
+    choiceInputs.forEach((input) => {
+      input.addEventListener('change', () => {
+        setAmounts();
+        toggleActions();
+      });
+    });
+
+    if (!document.querySelector('input[name="walletPaymentChoice"]:checked')) {
+      const paypalRadio = document.getElementById('wallet-paypal');
+      if (paypalRadio) paypalRadio.checked = true;
+    }
+    setAmounts();
+    toggleActions();
+
+    const showPaypalError = (message) => {
+      if (!paypalError) return;
+      paypalError.textContent = message;
+      paypalError.classList.remove('d-none');
+    };
+
+    paypal.Buttons({
+      onClick: (data, actions) => {
+        const amount = Number(amountInput.value || 0);
+        if (!amount || amount <= 0) {
+          showPaypalError('Enter a valid top-up amount.');
+          return actions.reject();
+        }
+        return actions.resolve();
+      },
+      createOrder: () => {
+        const amount = Number(amountInput.value || 0);
+        return fetch('/wallet/paypal/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount })
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.id) return data.id;
+            throw new Error(data.message || 'Unable to create PayPal order');
+          })
+          .catch(err => {
+            showPaypalError(err.message || 'Unable to create PayPal order');
+            throw err;
+          });
+      },
+      onApprove: (data) => {
+        return fetch('/wallet/paypal/capture-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderID: data.orderID })
+        })
+          .then(res => res.json())
+          .then(result => {
+            if (result && result.redirectUrl) {
+              window.location = result.redirectUrl;
+              return;
+            }
+            throw new Error(result.message || 'Payment completed, but redirect failed.');
+          })
+          .catch(err => {
+            showPaypalError(err.message || 'Unable to capture PayPal order');
+            throw err;
+          });
+      },
+      onError: (err) => {
+        console.error('PayPal error:', err);
+        showPaypalError('PayPal encountered an error. Please try again.');
+      }
+    }).render('#wallet-paypal-button-container');
+  </script>
 </body>
 </html>

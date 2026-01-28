@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title><%= isEdit ? 'Edit' : 'Create' %> Discount</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/styles.css" rel="stylesheet">
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <div class="container mt-4">
+    <h2 class="mb-3"><%= isEdit ? 'Edit' : 'Create' %> Discount</h2>
+
+    <% if (errors && errors.length) { %>
+      <div class="alert alert-danger"><%= errors[0] %></div>
+    <% } %>
+    <% if (messages && messages.length) { %>
+      <div class="alert alert-success"><%= messages[0] %></div>
+    <% } %>
+
+    <form action="<%= isEdit ? '/admin/discounts/' + form.id : '/admin/discounts' %>" method="POST">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Code</label>
+          <input name="code" class="form-control" required value="<%= form.code || '' %>">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Type</label>
+          <select name="type" class="form-select" required>
+            <option value="coupon" <%= form.type === 'coupon' ? 'selected' : '' %>>Coupon</option>
+            <option value="voucher" <%= form.type === 'voucher' ? 'selected' : '' %>>Voucher</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Scope</label>
+          <select name="scope" id="scopeField" class="form-select" required>
+            <option value="general" <%= form.scope === 'general' ? 'selected' : '' %>>General (Cart)</option>
+            <option value="item" <%= form.scope === 'item' ? 'selected' : '' %>>Item-specific</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Discount Type</label>
+          <select name="discount_type" class="form-select" required>
+            <option value="fixed" <%= form.discount_type === 'fixed' ? 'selected' : '' %>>Fixed Amount</option>
+            <option value="percent" <%= form.discount_type === 'percent' ? 'selected' : '' %>>Percentage</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Discount Value</label>
+          <input name="discount_value" type="number" step="0.01" min="0" class="form-control" required value="<%= form.discount_value || '' %>">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Max Discount (cap)</label>
+          <input name="max_discount" type="number" step="0.01" min="0" class="form-control" value="<%= form.max_discount || '' %>">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Minimum Spend</label>
+          <input name="min_spend" type="number" step="0.01" min="0" class="form-control" value="<%= form.min_spend || '' %>">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Total Usage Limit</label>
+          <input name="total_usage_limit" type="number" min="0" class="form-control" value="<%= form.total_usage_limit || '' %>">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Per-user Usage Limit</label>
+          <input name="per_user_limit" type="number" min="0" class="form-control" value="<%= form.per_user_limit || '' %>">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Starts At</label>
+          <input name="starts_at" type="datetime-local" class="form-control" value="<%= form.starts_at ? new Date(form.starts_at).toISOString().slice(0,16) : '' %>">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Expires At</label>
+          <input name="expires_at" type="datetime-local" class="form-control" value="<%= form.expires_at ? new Date(form.expires_at).toISOString().slice(0,16) : '' %>">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Description</label>
+          <input name="description" class="form-control" value="<%= form.description || '' %>">
+        </div>
+        <div class="col-12">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="stackable" id="stackable" value="1" <%= form.stackable ? 'checked' : '' %>>
+            <label class="form-check-label" for="stackable">Stackable with other vouchers</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="auto_apply" id="auto_apply" value="1" <%= form.auto_apply ? 'checked' : '' %>>
+            <label class="form-check-label" for="auto_apply">Auto-apply if eligible</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="is_active" id="is_active" value="1" <%= form.is_active !== 0 ? 'checked' : '' %>>
+            <label class="form-check-label" for="is_active">Active</label>
+          </div>
+        </div>
+
+        <div class="col-12" id="productPicker">
+          <label class="form-label">Eligible Products (item-specific only)</label>
+          <div class="row">
+            <% const grouped = {}; (products || []).forEach(function(p) { if (!grouped[p.category]) grouped[p.category] = []; grouped[p.category].push(p); }); %>
+            <% Object.keys(grouped).forEach(function(category) { %>
+              <div class="col-md-6 mb-2">
+                <div class="fw-semibold"><%= category %></div>
+                <% grouped[category].forEach(function(product) { %>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="productIds" value="<%= product.id %>" id="prod-<%= product.id %>" <%= selectedProducts.includes(product.id) ? 'checked' : '' %>>
+                    <label class="form-check-label" for="prod-<%= product.id %>">
+                      <%= product.productName %>
+                    </label>
+                  </div>
+                <% }) %>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><%= isEdit ? 'Save Changes' : 'Create Discount' %></button>
+        <a href="/admin/discounts" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    const scopeField = document.getElementById('scopeField');
+    const productPicker = document.getElementById('productPicker');
+
+    const toggleProducts = () => {
+      if (!scopeField || !productPicker) return;
+      productPicker.classList.toggle('d-none', scopeField.value !== 'item');
+    };
+
+    scopeField.addEventListener('change', toggleProducts);
+    toggleProducts();
+  </script>
+</body>
+</html>
