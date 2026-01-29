@@ -19,6 +19,7 @@
     <br>
     <div class="text-center"><h2>Products from Supermarket</h2></div>
     <br>
+    <div id="cartAlert" class="alert alert-success d-none" role="alert"></div>
     <div class="row mb-3 g-3 align-items-end">
       <div class="col-md-4">
         <label for="categoryFilter" class="form-label fw-semibold">Filter by Category</label>
@@ -47,18 +48,22 @@
               </div>
               <p class="mb-2 small text-muted">In stock: <%= products[i].quantity %></p>
               <div class="mt-auto">
-                <form action="/add-to-cart/<%= products[i].id %>" method="POST">
-                  <div class="input-group input-group-sm mb-2">
-                    <label class="input-group-text" for="quantity-<%= products[i].id %>">Qty</label>
-                    <select class="form-select" onchange="document.getElementById('quantity-<%= products[i].id %>').value = this.value">
-                      <% for (let q = 1; q <= 5; q++) { %>
-                        <option value="<%= q %>"><%= q %></option>
-                      <% } %>
-                    </select>
-                  </div>
-                  <input type="hidden" name="quantity" id="quantity-<%= products[i].id %>" value="1">
-                  <button type="submit" class="btn btn-primary w-100">Buy</button>
-                </form>
+                <div class="input-group input-group-sm mb-2">
+                  <label class="input-group-text" for="quantity-<%= products[i].id %>">Qty</label>
+                  <select class="form-select" data-qty>
+                    <% for (let q = 1; q <= 5; q++) { %>
+                      <option value="<%= q %>"><%= q %></option>
+                    <% } %>
+                  </select>
+                </div>
+                <div class="d-grid gap-2">
+                  <button type="button" class="btn btn-outline-primary js-add-to-cart" data-product-id="<%= products[i].id %>">Add to cart</button>
+                  <form action="/buy-now" method="POST" class="js-buy-now">
+                    <input type="hidden" name="productId" value="<%= products[i].id %>">
+                    <input type="hidden" name="qty" value="1">
+                    <button type="submit" class="btn btn-primary">Buy now</button>
+                  </form>
+                </div>
               </div>
             </div>
           </div>
@@ -86,6 +91,45 @@
 
       select.addEventListener('change', applyFilters);
       search.addEventListener('input', applyFilters);
+      const alertBox = document.getElementById('cartAlert');
+
+      const showAlert = (message, isError) => {
+        if (!alertBox) return;
+        alertBox.textContent = message;
+        alertBox.classList.remove('d-none', 'alert-danger', 'alert-success');
+        alertBox.classList.add(isError ? 'alert-danger' : 'alert-success');
+        setTimeout(() => alertBox.classList.add('d-none'), 3000);
+      };
+
+      document.querySelectorAll('.js-add-to-cart').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const card = button.closest('.product-card');
+          const productId = button.getAttribute('data-product-id');
+          const qtySelect = card ? card.querySelector('select[data-qty]') : null;
+          const qty = qtySelect ? qtySelect.value : '1';
+          try {
+            const response = await fetch(`/add-to-cart/${productId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ quantity: qty })
+            });
+            if (!response.ok) throw new Error('Unable to add to cart');
+            showAlert('Added to cart.', false);
+          } catch (error) {
+            showAlert('Failed to add to cart.', true);
+          }
+        });
+      });
+
+      document.querySelectorAll('.js-buy-now').forEach((form) => {
+        form.addEventListener('submit', () => {
+          const card = form.closest('.product-card');
+          const qtySelect = card ? card.querySelector('select[data-qty]') : null;
+          const qty = qtySelect ? qtySelect.value : '1';
+          const qtyInput = form.querySelector('input[name="qty"]');
+          if (qtyInput) qtyInput.value = qty;
+        });
+      });
     })();
   </script>
 </body>

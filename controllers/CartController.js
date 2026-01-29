@@ -26,7 +26,26 @@ module.exports = {
       if (err || !product) return res.status(400).send('Invalid product');
       Cart.addOrIncrement(userId, productId, qty, (addErr) => {
         if (addErr) return res.status(500).send('Error adding to cart');
+        req.flash('success', 'Added to cart.');
         res.redirect('/cart');
+      });
+    });
+  },
+  buyNow(req, res) {
+    if (!req.session.user) return res.redirect('/login');
+    const userId = req.session.user.id;
+    const productId = parseInt(req.body.productId, 10);
+    const qty = parseInt(req.body.qty, 10) || 1;
+
+    Product.getById(productId, (err, product) => {
+      if (err || !product) return res.status(400).send('Invalid product');
+      Cart.clear(userId, (clearErr) => {
+        if (clearErr) return res.status(500).send('Error preparing cart');
+        Cart.addOrIncrement(userId, productId, qty, (addErr) => {
+          if (addErr) return res.status(500).send('Error starting checkout');
+          req.flash('success', 'Buy now started. Cart now contains only this item.');
+          res.redirect('/cart');
+        });
       });
     });
   },

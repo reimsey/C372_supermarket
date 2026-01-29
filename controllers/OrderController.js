@@ -14,12 +14,23 @@ module.exports = {
     if (!req.session.user) return res.redirect('/login');
     const userId = req.session.user.id;
     const payWithWallet = req.body.payWithWallet === '1';
+    const paymentLabel = req.body.paymentMethodLabel || '';
     Cart.getItemsByUser(userId, async (cartErr, cart) => {
       if (cartErr) return res.status(500).send('Error loading cart');
       if (!cart || cart.length === 0) return res.redirect('/cart');
-      if (!payWithWallet) {
-        req.flash('error', 'Please select Wallet payment or use PayPal/NETS.');
+      const isCardPayment = Boolean(paymentLabel && paymentLabel.toLowerCase().includes('card'));
+      if (!payWithWallet && !isCardPayment) {
+        req.flash('error', 'Please select a payment method.');
         return res.redirect('/cart');
+      }
+      if (isCardPayment) {
+        const cardNumber = String(req.body.cardNumber || '').trim();
+        const cardExpiry = String(req.body.cardExpiry || '').trim();
+        const cardCvv = String(req.body.cardCvv || '').trim();
+        if (!cardNumber || !cardExpiry || !cardCvv) {
+          req.flash('error', 'Please fill in your card details.');
+          return res.redirect('/cart');
+        }
       }
 
       let discountSummary = null;
@@ -113,18 +124,22 @@ module.exports = {
         });
       };
 
-      Wallet.debit(
-        userId,
-        finalTotal,
-        { type: 'purchase', reference_type: 'order', note: 'Wallet purchase' },
-        (walletErr) => {
-          if (walletErr) {
-            req.flash('error', walletErr.message || 'Wallet payment failed');
-            return res.redirect('/cart');
+      if (payWithWallet) {
+        Wallet.debit(
+          userId,
+          finalTotal,
+          { type: 'purchase', reference_type: 'order', note: 'Wallet purchase' },
+          (walletErr) => {
+            if (walletErr) {
+              req.flash('error', walletErr.message || 'Wallet payment failed');
+              return res.redirect('/cart');
+            }
+            finalize('Wallet');
           }
-          finalize('Wallet');
-        }
-      );
+        );
+      } else {
+        finalize(paymentLabel || 'Card');
+      }
     });
   },
   purchaseHistory(req, res) {

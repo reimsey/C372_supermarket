@@ -140,6 +140,7 @@ app.get('/deleteProduct/:id', checkAuthenticated, checkAdmin, ProductController.
 // Cart (inject payment methods before rendering cart)
 app.post('/add-to-cart/:id', checkAuthenticated, CartController.addToCart);
 app.post('/add-to-cart', checkAuthenticated, CartController.addToCart);
+app.post('/buy-now', checkAuthenticated, CartController.buyNow);
 app.get('/cart',
   checkAuthenticated,
   (req, res, next) => {

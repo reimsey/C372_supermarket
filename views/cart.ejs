@@ -128,46 +128,72 @@
             <% } %>
           </div>
 
-          <form action="/purchase" method="POST" id="walletPurchaseForm">
-            <div class="border rounded p-3 mb-3">
-              <div class="fw-semibold mb-2">Digital Wallet</div>
-              <div class="d-flex align-items-center justify-content-between gap-3">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" name="payWithWallet" id="payWithWallet" value="1" <%= (walletBalance || 0) >= (discountSummary?.finalTotal || cartSubtotal || 0) ? '' : 'disabled' %>>
-                  <label class="form-check-label" for="payWithWallet">
-                    Pay with wallet (Balance: $<%= (walletBalance || 0).toFixed(2) %>)
-                  </label>
-                </div>
-                <% if ((walletBalance || 0) < (discountSummary?.finalTotal || cartSubtotal || 0)) { %>
-                  <a href="/wallet" class="btn btn-outline-primary btn-sm">Top up wallet</a>
-                <% } %>
+          <div class="border rounded p-3 mb-3">
+            <div class="fw-semibold mb-2">Choose Payment Method</div>
+            <div class="d-flex flex-column gap-2">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="paymentChoice" id="pay-wallet" value="wallet">
+                <label class="form-check-label" for="pay-wallet">Digital Wallet</label>
               </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="paymentChoice" id="pay-card" value="card">
+                <label class="form-check-label" for="pay-card">Manual Card</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="paymentChoice" id="pay-paypal" value="paypal">
+                <label class="form-check-label" for="pay-paypal">PayPal</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="paymentChoice" id="pay-nets" value="nets">
+                <label class="form-check-label" for="pay-nets">NETS QR</label>
+              </div>
+            </div>
+          </div>
+
+          <div id="payment-choice-error" class="text-danger small mb-2 d-none"></div>
+
+          <form action="/purchase" method="POST" id="walletPurchaseForm" class="d-none">
+            <input type="hidden" name="payWithWallet" value="1">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <div class="text-muted small">Balance: $<%= (walletBalance || 0).toFixed(2) %></div>
               <% if ((walletBalance || 0) < (discountSummary?.finalTotal || cartSubtotal || 0)) { %>
-                <div class="small text-muted mt-1">Insufficient balance for this cart total.</div>
+                <a href="/wallet" class="btn btn-outline-primary btn-sm">Top up wallet</a>
               <% } %>
             </div>
-
-            <div id="payment-choice-error" class="text-danger small mb-2 d-none"></div>
-            <button type="submit" class="btn btn-primary" id="walletPurchaseBtn">Pay with Wallet</button>
+            <% if ((walletBalance || 0) < (discountSummary?.finalTotal || cartSubtotal || 0)) { %>
+              <div class="small text-muted mb-2">Insufficient balance for this cart total.</div>
+            <% } %>
+            <button type="submit" class="btn btn-danger w-100" id="walletPurchaseBtn"></button>
           </form>
 
-          <div class="border rounded p-3 mt-4">
-            <div class="fw-semibold mb-2">PayPal</div>
+          <form action="/purchase" method="POST" id="cardPurchaseForm" class="d-none">
+            <input type="hidden" name="paymentMethodLabel" id="cardPaymentLabel" value="Card">
+            <div class="row g-2">
+              <div class="col-md-6">
+                <input type="text" name="cardName" class="form-control" placeholder="Name on card" required>
+              </div>
+              <div class="col-md-6">
+                <input type="text" name="cardNumber" class="form-control" placeholder="Card number" required>
+              </div>
+              <div class="col-md-6">
+                <input type="text" name="cardExpiry" class="form-control" placeholder="MM/YY" required>
+              </div>
+              <div class="col-md-6">
+                <input type="text" name="cardCvv" class="form-control" placeholder="CVV" required>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-danger w-100 mt-3" id="cardPurchaseBtn">Pay with Card</button>
+          </form>
+
+          <div id="paypalSection" class="d-none">
             <div id="paypal-button-container"></div>
             <div id="paypal-error" class="text-danger small mt-2 d-none"></div>
           </div>
 
-          <div class="border rounded p-3 mt-3">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-              <div class="fw-semibold">NETS QR</div>
-              <img src="/images/netsQrLogo.png" alt="NETS" width="64" height="32">
-            </div>
-            <p class="text-muted mb-3">Scan a NETS QR code with your bank app to complete payment.</p>
-            <form action="/nets/create-order" method="POST">
-              <input type="hidden" name="cartTotal" value="<%= total.toFixed(2) %>">
-              <button type="submit" class="btn btn-success">Generate NETS QR</button>
-            </form>
-          </div>
+          <form action="/nets/create-order" method="POST" id="netsPurchaseForm" class="d-none">
+            <input type="hidden" name="cartTotal" value="<%= total.toFixed(2) %>">
+            <button type="submit" class="btn btn-danger w-100" id="netsPurchaseBtn">Scan NETS QR to Pay</button>
+          </form>
         </div>
       </div>
 
@@ -195,26 +221,99 @@
         errorEl.classList.remove('d-none');
       };
 
-      const walletCheckbox = document.querySelector('#payWithWallet');
-      const walletForm = document.querySelector('#walletPurchaseForm');
       const paymentChoiceError = document.querySelector('#payment-choice-error');
+      const paymentRadios = document.querySelectorAll('input[name="paymentChoice"]');
+      const walletForm = document.querySelector('#walletPurchaseForm');
+      const cardForm = document.querySelector('#cardPurchaseForm');
+      const paypalSection = document.querySelector('#paypalSection');
+      const netsForm = document.querySelector('#netsPurchaseForm');
+      const walletBtn = document.querySelector('#walletPurchaseBtn');
+      const cardBtn = document.querySelector('#cardPurchaseBtn');
+      const netsBtn = document.querySelector('#netsPurchaseBtn');
+      const cardPaymentLabel = document.querySelector('#cardPaymentLabel');
 
-      if (walletForm) {
-        walletForm.addEventListener('submit', (event) => {
-          if (!walletCheckbox || !walletCheckbox.checked) {
-            event.preventDefault();
-            if (paymentChoiceError) {
-              paymentChoiceError.textContent = 'Please select a payment method (Wallet, PayPal, or NETS).';
-              paymentChoiceError.classList.remove('d-none');
-            }
-          }
-        });
+      const walletBalance = Number(<%= (walletBalance || 0).toFixed(2) %>);
+      const cartTotalValue = Number(totalEl?.dataset?.total || totalEl?.textContent || 0);
+      const walletLabel = `Pay $${cartTotalValue.toFixed(2)} with Wallet (Balance: $${walletBalance.toFixed(2)})`;
+
+      const hideAll = () => {
+        walletForm?.classList.add('d-none');
+        cardForm?.classList.add('d-none');
+        paypalSection?.classList.add('d-none');
+        netsForm?.classList.add('d-none');
+      };
+
+      const updateWalletButton = () => {
+        if (!walletBtn) return;
+        walletBtn.textContent = walletLabel;
+        const disabled = walletBalance < cartTotalValue;
+        walletBtn.disabled = disabled;
+      };
+
+      const updateCardButton = () => {
+        if (!cardBtn) return;
+        cardBtn.textContent = `Pay $${cartTotalValue.toFixed(2)} with Card`;
+      };
+
+      const updateNetsButton = () => {
+        if (!netsBtn) return;
+        netsBtn.textContent = `Scan NETS QR to Pay $${cartTotalValue.toFixed(2)}`;
+      };
+
+      const updateCardLabel = () => {
+        if (!cardPaymentLabel) return;
+        const numberField = cardForm?.querySelector('input[name="cardNumber"]');
+        const digits = String(numberField?.value || '').replace(/\D/g, '');
+        const last4 = digits.slice(-4);
+        cardPaymentLabel.value = last4 ? `Card **** ${last4}` : 'Card';
+      };
+
+      const onChoiceChange = () => {
+        hideAll();
+        if (paymentChoiceError) paymentChoiceError.classList.add('d-none');
+        const selected = document.querySelector('input[name="paymentChoice"]:checked');
+        if (!selected) return;
+        switch (selected.value) {
+          case 'wallet':
+            updateWalletButton();
+            walletForm?.classList.remove('d-none');
+            break;
+          case 'card':
+            updateCardButton();
+            cardForm?.classList.remove('d-none');
+            break;
+          case 'paypal':
+            paypalSection?.classList.remove('d-none');
+            break;
+          case 'nets':
+            updateNetsButton();
+            netsForm?.classList.remove('d-none');
+            break;
+          default:
+            break;
+        }
+      };
+
+      paymentRadios.forEach((radio) => radio.addEventListener('change', onChoiceChange));
+      onChoiceChange();
+
+      if (cardForm) {
+        cardForm.addEventListener('input', updateCardLabel);
+        updateCardLabel();
       }
 
       paypal.Buttons({
         onClick: (data, actions) => {
           if (!cartItems.length) {
             showPaypalError('Your cart is empty.');
+            return actions.reject();
+          }
+          const selected = document.querySelector('input[name="paymentChoice"]:checked');
+          if (!selected || selected.value !== 'paypal') {
+            if (paymentChoiceError) {
+              paymentChoiceError.textContent = 'Please select PayPal to continue.';
+              paymentChoiceError.classList.remove('d-none');
+            }
             return actions.reject();
           }
           return actions.resolve();
