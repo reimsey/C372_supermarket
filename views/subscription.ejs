@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Subscription</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="/styles.css" rel="stylesheet">
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <div class="container mt-4">
+    <h2>Subscription</h2>
+
+    <% if (errors && errors.length) { %>
+      <div class="alert alert-danger"><%= errors[0] %></div>
+    <% } %>
+    <% if (messages && messages.length) { %>
+      <div class="alert alert-success"><%= messages[0] %></div>
+    <% } %>
+
+    <div class="row g-4">
+      <div class="col-lg-7">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="mb-3">Benefits</h5>
+            <ul class="mb-0">
+              <li>Free delivery on your first order after subscribing.</li>
+              <li>Free delivery on orders $150+ after use of vouchers.</li>
+              <li>Earn 1 point per $1 spent (after use of vouchers).</li>
+              <li>Redeem points for vouchers.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="card h-100">
+          <div class="card-body d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="fw-bold">Subscription Price</div>
+              <div class="fs-4">$<%= Number(subscriptionPrice || 40).toFixed(2) %></div>
+            </div>
+            <div class="text-muted small mb-3">Pay once to activate benefits immediately.</div>
+            <% if (subscription && subscription.is_active) { %>
+              <div class="alert alert-success">Your subscription is active.</div>
+            <% } else { %>
+              <a href="/subscription/checkout" class="btn btn-primary mt-auto">Subscribe Now</a>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <% if (subscription && subscription.is_active) { %>
+      <div class="card mt-4">
+        <div class="card-body">
+          <h5 class="mb-3">Available Coupons</h5>
+          <div class="row g-2 mb-3">
+            <div class="col-md-4">
+              <label class="form-label">Filter by scope</label>
+              <select id="couponScopeFilter" class="form-select">
+                <option value="all">All</option>
+                <option value="general">General (Cart)</option>
+                <option value="item">Item-specific</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Sort by</label>
+              <select id="couponSort" class="form-select">
+                <option value="date-desc">Date: Newest</option>
+                <option value="date-asc">Date: Oldest</option>
+                <option value="price-desc">Amount: High to Low</option>
+                <option value="price-asc">Amount: Low to High</option>
+              </select>
+            </div>
+          </div>
+
+          <% if (!templates || templates.length === 0) { %>
+            <div class="text-muted">No coupons available right now.</div>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle" id="couponTable">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Scope</th>
+                    <th>Amount</th>
+                    <th>Min Spend</th>
+                    <th>Terms</th>
+                    <th>Created</th>
+                    <th class="text-end">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% templates.forEach(function(template) { %>
+                    <% const isClaimed = claimedTemplateIds && claimedTemplateIds.has(Number(template.id)); %>
+                    <tr data-scope="<%= template.scope %>" data-value="<%= Number(template.discount_value || 0) %>" data-date="<%= new Date(template.created_at || Date.now()).getTime() %>">
+                      <td class="fw-semibold"><%= template.code %></td>
+                      <td><%= template.scope === 'item' ? 'Item-specific' : 'General' %></td>
+                      <td>$<%= Number(template.discount_value || 0).toFixed(2) %></td>
+                      <td>$<%= Number(template.min_spend || 0).toFixed(2) %></td>
+                      <td><%= template.description || '—' %></td>
+                      <td><%= template.created_at ? new Date(template.created_at).toLocaleDateString() : '—' %></td>
+                      <td class="text-end">
+                      <% if (isClaimed) { %>
+                        <span class="badge text-bg-secondary">Not available</span>
+                      <% } else { %>
+                        <form action="/subscription/claim" method="POST" class="d-inline">
+                          <input type="hidden" name="templateId" value="<%= template.id %>">
+                            <button type="submit" class="btn btn-outline-primary btn-sm">Claim</button>
+                          </form>
+                        <% } %>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    <% } else { %>
+      <div class="card mt-4">
+        <div class="card-body">
+          <h5 class="mb-2">Available Coupons</h5>
+          <div class="text-muted">Subscribe to unlock available coupons.</div>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="card mt-4">
+      <div class="card-body">
+        <h5 class="mb-3">My Claimed Coupons</h5>
+        <% if (!claimedCoupons || claimedCoupons.length === 0) { %>
+          <div class="text-muted">You have not claimed any coupons yet.</div>
+        <% } else { %>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Amount</th>
+                  <th>Min Spend</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% claimedCoupons.forEach(function(coupon) { %>
+                  <tr>
+                    <td class="fw-semibold"><%= coupon.code %></td>
+                    <td>$<%= Number(coupon.discount_value || 0).toFixed(2) %></td>
+                    <td>$<%= Number(coupon.min_spend || 0).toFixed(2) %></td>
+                    <td><%= Number(coupon.user_used) > 0 ? 'Used' : 'Available' %></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const scopeFilter = document.getElementById('couponScopeFilter');
+    const sortSelect = document.getElementById('couponSort');
+    const tableBody = document.querySelector('#couponTable tbody');
+
+    const applyFilters = () => {
+      if (!tableBody) return;
+      const rows = Array.from(tableBody.querySelectorAll('tr'));
+      const scope = scopeFilter ? scopeFilter.value : 'all';
+      const sortValue = sortSelect ? sortSelect.value : 'date-desc';
+
+      rows.forEach(row => {
+        const rowScope = row.dataset.scope || 'general';
+        const visible = scope === 'all' || rowScope === scope;
+        row.classList.toggle('d-none', !visible);
+      });
+
+      const visibleRows = rows.filter(row => !row.classList.contains('d-none'));
+      visibleRows.sort((a, b) => {
+        const aValue = Number(a.dataset.value || 0);
+        const bValue = Number(b.dataset.value || 0);
+        const aDate = Number(a.dataset.date || 0);
+        const bDate = Number(b.dataset.date || 0);
+        switch (sortValue) {
+          case 'price-asc':
+            return aValue - bValue;
+          case 'price-desc':
+            return bValue - aValue;
+          case 'date-asc':
+            return aDate - bDate;
+          case 'date-desc':
+          default:
+            return bDate - aDate;
+        }
+      });
+      visibleRows.forEach(row => tableBody.appendChild(row));
+    };
+
+    if (scopeFilter) scopeFilter.addEventListener('change', applyFilters);
+    if (sortSelect) sortSelect.addEventListener('change', applyFilters);
+    applyFilters();
+  </script>
+</body>
+</html>

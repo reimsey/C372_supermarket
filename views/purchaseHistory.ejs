@@ -27,6 +27,7 @@
                                 <div class="fw-bold">Purchase Date:</div>
                                 <div><%= purchase.date.toLocaleString ? purchase.date.toLocaleString() : purchase.date %></div>
                                 <div class="small text-muted">Payment: <%= purchase.paymentMethod || 'N/A' %></div>
+                                <div class="small text-muted">Status: <%= purchase.status === 'delivered' ? 'Delivered' : (purchase.status === 'completed' ? 'Completed' : 'Processing') %></div>
                                 <% if (purchase.receipt_id) { %>
                                     <div class="small"><a href="/receipt/<%= purchase.receipt_id %>">View Receipt</a></div>
                                 <% } %>
@@ -34,6 +35,31 @@
                             <div class="text-end">
                                 <div class="fw-bold">Total:</div>
                                 <div>$<%= purchase.total.toFixed(2) %></div>
+                                <% if (purchase.status === 'delivered') { %>
+                                    <form action="/purchase/received" method="POST" class="mt-2">
+                                        <input type="hidden" name="receipt_id" value="<%= purchase.receipt_id %>">
+                                        <button type="submit" class="btn btn-sm btn-outline-success">Order Received</button>
+                                    </form>
+                                <% } %>
+                                <% if (purchase.status === 'completed') { %>
+                                    <% if ((purchase.refunded_amount || 0) > 0) { %>
+                                        <div class="small text-muted mt-2">Refunded: $<%= purchase.refunded_amount.toFixed(2) %></div>
+                                    <% } else if (purchase.refundRequest && purchase.refundRequest.status === 'pending') { %>
+                                        <div class="small text-muted mt-2">Refund requested (pending)</div>
+                                    <% } else if (purchase.refundRequest && purchase.refundRequest.status === 'rejected') { %>
+                                        <div class="small text-muted mt-2">Refund rejected</div>
+                                    <% } else if (purchase.refundRequest && purchase.refundRequest.status === 'approved') { %>
+                                        <div class="small text-muted mt-2">Refund approved</div>
+                                    <% } else { %>
+                                        <form action="/refunds/request" method="POST" class="mt-2">
+                                            <input type="hidden" name="receipt_id" value="<%= purchase.receipt_id %>">
+                                            <div class="mb-2">
+                                                <input type="text" name="reason" class="form-control form-control-sm" placeholder="Reason for refund">
+                                            </div>
+                                            <button type="submit" class="btn btn-sm btn-outline-warning">Request Refund</button>
+                                        </form>
+                                    <% } %>
+                                <% } %>
                             </div>
                         </div>
                         <table class="table mb-0 table-sm">

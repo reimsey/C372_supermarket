@@ -43,12 +43,16 @@
                 <div>$<%= Number(discountSummary?.subtotal || total).toFixed(2) %></div>
               </div>
               <div class="d-flex justify-content-between text-muted">
-                <div>Discounts</div>
+                <div>Vouchers</div>
                 <div>-$<%= Number(discountSummary?.totalDiscount || 0).toFixed(2) %></div>
+              </div>
+              <div class="d-flex justify-content-between text-muted">
+                <div>Delivery</div>
+                <div>$<%= Number(pricing?.deliveryFee || 0).toFixed(2) %></div>
               </div>
               <div class="d-flex justify-content-between fw-semibold mt-2">
                 <div>Total</div>
-                <div>$<%= Number(discountSummary?.finalTotal || total).toFixed(2) %></div>
+                <div>$<%= Number(pricing?.finalTotal || discountSummary?.finalTotal || total).toFixed(2) %></div>
               </div>
               <% if ((discountSummary?.applied || []).length > 0 || discountSummary?.autoApplied) { %>
                 <div class="small text-muted mt-2">

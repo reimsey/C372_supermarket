@@ -38,25 +38,37 @@
             <a class="nav-link" href="/wallet">Wallet</a>
           </li>
           <li class="nav-item">
+            <a class="nav-link" href="/subscription">Subscription</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/rewards">Rewards</a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link" href="/purchase-history">Purchase History</a>
           </li>
 
         <% } else if (user.role === 'admin') { %>
           <!-- Admin -->
-          <li class="nav-item">
-            <a class="nav-link" href="/inventory">Inventory</a>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+              Admin Matters
+            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="/inventory">Inventory</a></li>
+              <li><a class="dropdown-item" href="/addProduct">Add Product</a></li>
+              <li><a class="dropdown-item" href="/admin/view-signup">View Sign Ups</a></li>
+              <li><a class="dropdown-item" href="/admin/discounts">Vouchers</a></li>
+            </ul>
           </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/addProduct">Add Product</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/admin/history">User Purchase History</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/admin/view-signup">View Sign Ups</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/admin/discounts">Discounts</a>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+              User Matters
+            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="/admin/history">User Purchase History</a></li>
+              <li><a class="dropdown-item" href="/admin/orders">Orders</a></li>
+              <li><a class="dropdown-item" href="/admin/refunds">Refund Requests</a></li>
+            </ul>
           </li>
         <% } %>
       </ul>

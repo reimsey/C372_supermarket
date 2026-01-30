@@ -2,6 +2,9 @@ const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const Wallet = require('../models/Wallet');
 const discountService = require('../services/discounts');
+const DiscountCode = require('../models/DiscountCode');
+const Loyalty = require('../models/Loyalty');
+const checkoutTotals = require('../services/checkoutTotals');
 
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
@@ -76,20 +79,58 @@ module.exports = {
         req.flash('error', discountSummary.errors.join(' '));
       }
 
-      Wallet.getBalance(req.session.user.id, (balErr, balance) => {
-        if (balErr) console.error('Error loading wallet balance:', balErr);
-        res.render('cart', {
-          cart: items || [],
-          user: req.session.user,
-          paymentMethods: req.paymentMethods || [],
-          walletBalance: roundMoney(balance || 0),
-          cartSubtotal: subtotal,
-          discountSummary,
-          appliedCodes: req.session.appliedDiscountCodes || [],
-          messages: req.flash('success'),
-          errors: req.flash('error')
+      try {
+        const [pricing, voucherList, pointsBalance] = await Promise.all([
+          checkoutTotals.computeTotals(req.session.user.id, discountSummary),
+          DiscountCode.listUserVouchers(req.session.user.id),
+          Loyalty.getBalance(req.session.user.id)
+        ]);
+
+        const availableVouchers = (voucherList || []).filter(voucher => Number(voucher.user_used) === 0);
+
+        Wallet.getBalance(req.session.user.id, (balErr, balance) => {
+          if (balErr) console.error('Error loading wallet balance:', balErr);
+          res.render('cart', {
+            cart: items || [],
+            user: req.session.user,
+            paymentMethods: req.paymentMethods || [],
+            walletBalance: roundMoney(balance || 0),
+            cartSubtotal: subtotal,
+            discountSummary,
+            appliedCodes: req.session.appliedDiscountCodes || [],
+            pricing,
+            availableVouchers,
+            pointsBalance: Number(pointsBalance) || 0,
+            messages: req.flash('success'),
+            errors: req.flash('error')
+          });
         });
-      });
+      } catch (pricingErr) {
+        console.error('Error calculating totals:', pricingErr);
+        Wallet.getBalance(req.session.user.id, (balErr, balance) => {
+          if (balErr) console.error('Error loading wallet balance:', balErr);
+          res.render('cart', {
+            cart: items || [],
+            user: req.session.user,
+            paymentMethods: req.paymentMethods || [],
+            walletBalance: roundMoney(balance || 0),
+            cartSubtotal: subtotal,
+            discountSummary,
+            appliedCodes: req.session.appliedDiscountCodes || [],
+            pricing: {
+              itemsTotal: discountSummary.finalTotal,
+              deliveryFee: 0,
+              finalTotal: discountSummary.finalTotal,
+              baseDeliveryFee: 0,
+              freeDeliveryThreshold: 0
+            },
+            availableVouchers: [],
+            pointsBalance: 0,
+            messages: req.flash('success'),
+            errors: req.flash('error')
+          });
+        });
+      }
     });
   },
   removeFromCart(req, res) {

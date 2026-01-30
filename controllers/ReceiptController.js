@@ -1,4 +1,5 @@
 const Receipt = require('../models/Receipt');
+const RefundRequest = require('../models/RefundRequest');
 
 module.exports = {
   viewReceipt(req, res) {
@@ -14,11 +15,23 @@ module.exports = {
         return res.status(403).send('Access denied');
       }
 
-      res.render('receipt', {
-        user: req.session.user,
-        receipt: data.receipt,
-        items: data.items,
-        discounts: data.discounts || []
+      RefundRequest.getByReceiptId(receiptId).then((refundRequest) => {
+        res.render('receipt', {
+          user: req.session.user,
+          receipt: data.receipt,
+          items: data.items,
+          discounts: data.discounts || [],
+          refundRequest
+        });
+      }).catch((refundErr) => {
+        console.error('Error loading refund request:', refundErr);
+        res.render('receipt', {
+          user: req.session.user,
+          receipt: data.receipt,
+          items: data.items,
+          discounts: data.discounts || [],
+          refundRequest: null
+        });
       });
     });
   },
@@ -58,9 +71,10 @@ module.exports = {
       doc.moveDown();
 
       doc.text(`Subtotal: $${Number(data.receipt.subtotal).toFixed(2)}`);
-      doc.text(`Discounts: -$${Number(data.receipt.discount_amount).toFixed(2)}`);
+      doc.text(`Vouchers: -$${Number(data.receipt.discount_amount).toFixed(2)}`);
+      doc.text(`Delivery: $${Number(data.receipt.delivery_fee || 0).toFixed(2)}`);
       if (data.discounts && data.discounts.length > 0) {
-        doc.text('Discount Codes:', { underline: true });
+        doc.text('Voucher Codes:', { underline: true });
         data.discounts.forEach((discount) => {
           doc.text(`${discount.code}: -$${Number(discount.discount_amount).toFixed(2)}`);
         });

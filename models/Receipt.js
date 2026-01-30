@@ -4,8 +4,8 @@ module.exports = {
   create(receipt, callback) {
     const sql = `
       INSERT INTO receipts
-      (receipt_id, userId, subtotal, discount_amount, final_total, payment_method)
-      VALUES (?, ?, ?, ?, ?, ?)
+      (receipt_id, userId, subtotal, discount_amount, delivery_fee, final_total, payment_method, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
     db.query(
       sql,
@@ -14,8 +14,10 @@ module.exports = {
         receipt.userId,
         receipt.subtotal,
         receipt.discount_amount,
+        receipt.delivery_fee || 0,
         receipt.final_total,
-        receipt.payment_method
+        receipt.payment_method,
+        receipt.status || 'processing'
       ],
       callback
     );
@@ -40,7 +42,8 @@ module.exports = {
 
   getByReceiptId(receiptId, callback) {
     const receiptSql = `
-      SELECT receipt_id, userId, subtotal, discount_amount, final_total, payment_method, createdAt,
+      SELECT receipt_id, userId, subtotal, discount_amount, delivery_fee, final_total, payment_method, status,
+             createdAt, delivered_at, completed_at,
              refunded_amount, refunded_at, refunded_by
       FROM receipts
       WHERE receipt_id = ?
@@ -80,5 +83,23 @@ module.exports = {
       WHERE receipt_id = ? AND (refunded_amount IS NULL OR refunded_amount = 0)
     `;
     db.query(sql, [amount, refundedBy, receiptId], callback);
+  },
+
+  markDelivered(receiptId, callback) {
+    const sql = `
+      UPDATE receipts
+      SET status = 'delivered', delivered_at = NOW()
+      WHERE receipt_id = ? AND status = 'processing'
+    `;
+    db.query(sql, [receiptId], callback);
+  },
+
+  markCompleted(receiptId, callback) {
+    const sql = `
+      UPDATE receipts
+      SET status = 'completed', completed_at = NOW()
+      WHERE receipt_id = ? AND status = 'delivered'
+    `;
+    db.query(sql, [receiptId], callback);
   }
 };

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rewards</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="/styles.css" rel="stylesheet">
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <div class="container mt-4">
+    <h2>Rewards</h2>
+
+    <% if (errors && errors.length) { %>
+      <div class="alert alert-danger"><%= errors[0] %></div>
+    <% } %>
+    <% if (messages && messages.length) { %>
+      <div class="alert alert-success"><%= messages[0] %></div>
+    <% } %>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-bold">Points Balance</div>
+            <div class="text-muted small">Point value: $<%= Number(pointValue).toFixed(2) %> each</div>
+          </div>
+          <div class="fs-4"><%= Number(pointsBalance || 0) %> pts</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="mb-3">Redeem a Voucher</h5>
+        <% if (!templates || templates.length === 0) { %>
+          <div class="text-muted">No vouchers available right now.</div>
+        <% } else { %>
+          <div class="row g-3">
+            <% templates.forEach(function(template) { %>
+              <div class="col-md-6 col-lg-4">
+                <div class="border rounded p-3 h-100">
+                  <div class="fw-semibold">$<%= Number(template.discount_value).toFixed(2) %> Voucher</div>
+                  <div class="text-muted small mt-1"><%= template.description || 'Redeemable voucher' %></div>
+                  <div class="mt-2 small">Min spend: $<%= Number(template.min_spend || 0).toFixed(2) %></div>
+                  <div class="mt-2 fw-semibold"><%= template.points_cost %> pts</div>
+                  <form action="/rewards/redeem" method="POST" class="mt-3">
+                    <input type="hidden" name="templateId" value="<%= template.id %>">
+                    <button type="submit" class="btn btn-outline-primary btn-sm">Redeem</button>
+                  </form>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <h5 class="mb-3">My Vouchers</h5>
+        <% if (!vouchers || vouchers.length === 0) { %>
+          <div class="text-muted">You have no redeemed vouchers yet.</div>
+        <% } else { %>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Amount</th>
+                  <th>Min Spend</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% vouchers.forEach(function(voucher) { %>
+                  <tr>
+                    <td class="fw-semibold"><%= voucher.code %></td>
+                    <td>$<%= Number(voucher.discount_value).toFixed(2) %></td>
+                    <td>$<%= Number(voucher.min_spend || 0).toFixed(2) %></td>
+                    <td><%= voucher.used ? 'Used' : 'Available' %></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -6,7 +6,7 @@ module.exports = {
     db.query(sql, [username, email, password, address, contact, role], callback);
   },
   findByEmailAndPassword(email, password, callback) {
-    const sql = 'SELECT * FROM users WHERE email = ? AND password = SHA1(?)';
+    const sql = 'SELECT * FROM users WHERE email = ? AND password = SHA1(?) AND is_active = 1';
     db.query(sql, [email, password], (err, rows) => {
       if (err) return callback(err);
       callback(null, rows[0] || null);
@@ -20,11 +20,14 @@ module.exports = {
   },
   listRecent(limit, callback) {
     const sql = `
-      SELECT id, username, email, role, address, contact
+      SELECT id, username, email, role, address, contact, is_active
       FROM users
       ORDER BY id DESC
       LIMIT ?
     `;
     db.query(sql, [limit], callback);
+  },
+  deleteById(id, callback) {
+    db.query('UPDATE users SET is_active = 0 WHERE id = ?', [id], callback);
   }
 };

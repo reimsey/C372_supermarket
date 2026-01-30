@@ -14,6 +14,32 @@
 
 <div class="container mt-4">
     <h2>Recently Registered Users</h2>
+    <% if (errors && errors.length) { %>
+        <div class="alert alert-danger"><%= errors[0] %></div>
+    <% } %>
+    <% if (messages && messages.length) { %>
+        <div class="alert alert-success"><%= messages[0] %></div>
+    <% } %>
+    <% const roleValue = (typeof roleFilter !== 'undefined' && roleFilter) ? roleFilter : 'all'; %>
+    <% const searchValue = (typeof search !== 'undefined' && search) ? search : ''; %>
+    <form method="GET" action="/admin/view-signup" class="row g-2 align-items-end mb-3">
+        <div class="col-md-3">
+            <label class="form-label">Filter by role</label>
+            <select name="role" class="form-select">
+                <option value="all" <%= roleValue === 'all' ? 'selected' : '' %>>All</option>
+                <option value="admin" <%= roleValue === 'admin' ? 'selected' : '' %>>Admin</option>
+                <option value="user" <%= roleValue === 'user' ? 'selected' : '' %>>User</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Search</label>
+            <input type="text" name="q" class="form-control" value="<%= searchValue %>" placeholder="Username or email">
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-outline-primary">Apply</button>
+        </div>
+    </form>
+
     <% if (!users || users.length === 0) { %>
         <p>No recent registrations.</p>
     <% } else { %>
@@ -24,8 +50,10 @@
                     <th>Username</th>
                     <th>Email</th>
                     <th>Role</th>
+                    <th>Status</th>
                     <th>Address</th>
                     <th>Contact</th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -35,8 +63,16 @@
                         <td><%= u.username %></td>
                         <td><%= u.email %></td>
                         <td><%= u.role %></td>
+                        <td><%= u.is_active === 0 ? 'Unavailable' : 'Active' %></td>
                         <td><%= u.address %></td>
                         <td><%= u.contact %></td>
+                        <td class="text-end">
+                            <% if (u.role !== 'admin' && u.is_active !== 0) { %>
+                                <form action="/admin/users/<%= u.id %>/delete" method="POST" class="d-inline" onsubmit="return confirm('Delete this user?');">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
+                                </form>
+                            <% } %>
+                        </td>
                     </tr>
                 <% }) %>
             </tbody>

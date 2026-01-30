@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Orders In Process</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="/styles.css" rel="stylesheet">
+</head>
+<body>
+<%- include('partials/header') %>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">Orders</h2>
+        <div class="text-muted">Admin view</div>
+    </div>
+
+    <% if (errors && errors.length) { %>
+        <div class="alert alert-danger"><%= errors[0] %></div>
+    <% } %>
+    <% if (messages && messages.length) { %>
+        <div class="alert alert-success"><%= messages[0] %></div>
+    <% } %>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <h5 class="mb-2">Orders In Progress</h5>
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <label class="form-label">Sort by date</label>
+                    <select class="form-select" id="sortProgress">
+                        <option value="date-desc">Newest</option>
+                        <option value="date-asc">Oldest</option>
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="form-label">Filter date</label>
+                    <input type="date" class="form-control" id="filterProgress">
+                </div>
+            </div>
+            <div id="progressList">
+                <% if (!orders || orders.length === 0) { %>
+                    <div class="alert alert-info">No orders in progress.</div>
+                <% } else { %>
+                    <% orders.forEach(order => { %>
+                        <div class="card mb-3" data-date="<%= new Date(order.date || Date.now()).toISOString().slice(0,10) %>">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <div class="fw-bold">User:</div>
+                            <% if (order.user && order.user.is_active === 0) { %>
+                                <div>User unavailable (ID: <%= order.user.id %>)</div>
+                            <% } else { %>
+                                <div><%= order.user.username %> (ID: <%= order.user.id %>)</div>
+                            <% } %>
+                            <div class="small text-muted">Payment: <%= order.paymentMethod || 'N/A' %></div>
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold">Purchase Date:</div>
+                            <div><%= order.date?.toLocaleString ? order.date.toLocaleString() : order.date %></div>
+                            <div class="fw-bold mt-2">Total: $<%= order.total.toFixed(2) %></div>
+                            <% if (order.receipt_id) { %>
+                                <form action="/admin/orders/complete" method="POST" class="mt-2">
+                                    <input type="hidden" name="receipt_id" value="<%= order.receipt_id %>">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">Order Completed</button>
+                                </form>
+                            <% } %>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Category</th>
+                                    <th>Qty</th>
+                                    <th>Price (per item)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% order.items.forEach(item => { %>
+                                    <tr>
+                                        <td><%= item.productName %></td>
+                                        <td><%= item.category %></td>
+                                        <td><%= item.qty %></td>
+                                        <td>$<%= item.price.toFixed(2) %></td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                        </div>
+                    <% }) %>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <h5 class="mb-2">Orders Completed</h5>
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <label class="form-label">Sort by date</label>
+                    <select class="form-select" id="sortCompleted">
+                        <option value="date-desc">Newest</option>
+                        <option value="date-asc">Oldest</option>
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="form-label">Filter date</label>
+                    <input type="date" class="form-control" id="filterCompleted">
+                </div>
+            </div>
+            <div id="completedList">
+                <% if (!completedOrders || completedOrders.length === 0) { %>
+                    <div class="alert alert-info">No completed orders.</div>
+                <% } else { %>
+                    <% completedOrders.forEach(order => { %>
+                        <div class="card mb-3" data-date="<%= new Date(order.date || Date.now()).toISOString().slice(0,10) %>">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <div class="fw-bold">User:</div>
+                            <% if (order.user && order.user.is_active === 0) { %>
+                                <div>User unavailable (ID: <%= order.user.id %>)</div>
+                            <% } else { %>
+                                <div><%= order.user.username %> (ID: <%= order.user.id %>)</div>
+                            <% } %>
+                            <div class="small text-muted">Payment: <%= order.paymentMethod || 'N/A' %></div>
+                            <div class="small text-muted">Status: <%= order.status === 'completed' ? 'Completed' : 'Delivered' %></div>
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold">Purchase Date:</div>
+                            <div><%= order.date?.toLocaleString ? order.date.toLocaleString() : order.date %></div>
+                            <div class="fw-bold mt-2">Total: $<%= order.total.toFixed(2) %></div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Category</th>
+                                    <th>Qty</th>
+                                    <th>Price (per item)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% order.items.forEach(item => { %>
+                                    <tr>
+                                        <td><%= item.productName %></td>
+                                        <td><%= item.category %></td>
+                                        <td><%= item.qty %></td>
+                                        <td>$<%= item.price.toFixed(2) %></td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                        </div>
+                    <% }) %>
+                <% } %>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const applyListControls = (listId, sortId, filterId) => {
+        const listEl = document.getElementById(listId);
+        const sortEl = document.getElementById(sortId);
+        const filterEl = document.getElementById(filterId);
+        if (!listEl || !sortEl || !filterEl) return;
+
+        const apply = () => {
+            const rows = Array.from(listEl.querySelectorAll('.card'));
+            const filterDate = filterEl.value || '';
+            const sort = sortEl.value || 'date-desc';
+
+            rows.forEach(row => {
+                const rowDate = row.dataset.date || '';
+                const visible = !filterDate || rowDate === filterDate;
+                row.classList.toggle('d-none', !visible);
+            });
+
+            const visibleRows = rows.filter(row => !row.classList.contains('d-none'));
+            visibleRows.sort((a, b) => {
+                const aDate = a.dataset.date || '';
+                const bDate = b.dataset.date || '';
+                if (sort === 'date-asc') return aDate.localeCompare(bDate);
+                return bDate.localeCompare(aDate);
+            });
+            visibleRows.forEach(row => listEl.appendChild(row));
+        };
+
+        sortEl.addEventListener('change', apply);
+        filterEl.addEventListener('change', apply);
+        apply();
+    };
+
+    applyListControls('progressList', 'sortProgress', 'filterProgress');
+    applyListControls('completedList', 'sortCompleted', 'filterCompleted');
+</script>
+</body>
+</html>

@@ -12,8 +12,11 @@ const PaymentMethod = require('./models/PaymentMethod');
 const Receipt = require('./models/Receipt');
 const paypal = require('./models/Paypal');
 const Wallet = require('./models/Wallet');
+const Loyalty = require('./models/Loyalty');
+const Subscription = require('./models/Subscription');
 const nets = require('./services/nets');
 const discountService = require('./services/discounts');
+const checkoutTotals = require('./services/checkoutTotals');
 const DiscountCode = require('./models/DiscountCode');
 const crypto = require('crypto');
 
@@ -25,6 +28,10 @@ const AdminController = require('./controllers/AdminController');
 const WalletController = require('./controllers/WalletController');
 const ReceiptController = require('./controllers/ReceiptController');
 const DiscountController = require('./controllers/DiscountController');
+const LoyaltyController = require('./controllers/LoyaltyController');
+const SubscriptionController = require('./controllers/SubscriptionController');
+const VoucherController = require('./controllers/VoucherController');
+const RefundController = require('./controllers/RefundController');
 
 // Multer config
 const storage = multer.diskStorage({
@@ -105,7 +112,7 @@ app.post('/login', (req, res) => {
     req.flash('error', 'All fields are required.');
     return res.redirect('/login');
   }
-  const sql = 'SELECT * FROM users WHERE email = ? AND password = SHA1(?)';
+  const sql = 'SELECT * FROM users WHERE email = ? AND password = SHA1(?) AND is_active = 1';
   db.query(sql, [email, password], (err, results) => {
     if (err) {
       console.error('Login error:', err);
@@ -155,23 +162,34 @@ app.get('/cart',
   }
 );
 app.post('/cart/remove/:id', checkAuthenticated, CartController.removeFromCart);
-app.post('/cart/discounts/apply', checkAuthenticated, async (req, res) => {
-  const codeInput = req.body.code;
-  const code = DiscountCode.normalizeCode(codeInput);
-  if (!code) {
-    req.flash('error', 'Please enter a voucher or coupon code.');
+app.post('/cart/vouchers/apply', checkAuthenticated, async (req, res) => {
+  const voucherId = Number(req.body.voucherId);
+  if (!voucherId) {
+    req.flash('error', 'Please choose a voucher to apply.');
     return res.redirect('/cart');
   }
-
-  const currentCodes = req.session.appliedDiscountCodes || [];
-  if (currentCodes.includes(code)) {
-    req.flash('error', 'This code is already applied.');
-    return res.redirect('/cart');
-  }
-
-  const nextCodes = currentCodes.concat(code);
 
   try {
+    const voucher = await DiscountCode.getById(voucherId);
+    if (!voucher || voucher.is_template || Number(voucher.user_id) !== Number(req.session.user.id)) {
+      req.flash('error', 'Voucher is not available for your account.');
+      return res.redirect('/cart');
+    }
+
+    const code = DiscountCode.normalizeCode(voucher.code);
+    if (!code) {
+      req.flash('error', 'Voucher code is invalid.');
+      return res.redirect('/cart');
+    }
+
+    const currentCodes = req.session.appliedDiscountCodes || [];
+    if (currentCodes.includes(code)) {
+      req.flash('error', 'This voucher is already applied.');
+      return res.redirect('/cart');
+    }
+
+    const nextCodes = currentCodes.concat(code);
+
     const cartItems = await new Promise((resolve, reject) => {
       Cart.getItemsByUser(req.session.user.id, (err, items) => (err ? reject(err) : resolve(items || [])));
     });
@@ -187,26 +205,26 @@ app.post('/cart/discounts/apply', checkAuthenticated, async (req, res) => {
     }
 
     req.session.appliedDiscountCodes = summary.applied.map(item => item.code);
-    req.flash('success', 'Discount applied.');
+    req.flash('success', 'Voucher applied.');
     res.redirect('/cart');
   } catch (err) {
-    console.error('Error applying discount:', err);
-    req.flash('error', 'Unable to apply discount right now.');
+    console.error('Error applying voucher:', err);
+    req.flash('error', 'Unable to apply voucher right now.');
     res.redirect('/cart');
   }
 });
 
-app.post('/cart/discounts/remove', checkAuthenticated, (req, res) => {
+app.post('/cart/vouchers/remove', checkAuthenticated, (req, res) => {
   const code = DiscountCode.normalizeCode(req.body.code);
   const currentCodes = req.session.appliedDiscountCodes || [];
   req.session.appliedDiscountCodes = currentCodes.filter(item => item !== code);
-  req.flash('success', 'Discount removed.');
+    req.flash('success', 'Voucher removed.');
   res.redirect('/cart');
 });
 
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
-const finalizePurchase = (userId, cart, subtotal, discountSummary, paymentLabel, done) => {
+const finalizePurchase = (userId, cart, discountSummary, pricing, paymentLabel, done) => {
   let remaining = cart.length;
   let finished = false;
   const receiptId = crypto.randomUUID();
@@ -223,8 +241,10 @@ const finalizePurchase = (userId, cart, subtotal, discountSummary, paymentLabel,
     done(null, receiptId);
   };
 
+  const subtotal = discountSummary?.subtotal || 0;
   const discountTotal = discountSummary?.totalDiscount || 0;
-  const finalTotal = discountSummary?.finalTotal || subtotal;
+  const deliveryFee = pricing?.deliveryFee || 0;
+  const finalTotal = pricing?.finalTotal || discountSummary?.finalTotal || subtotal;
   const appliedCodes = discountSummary?.applied || [];
   const autoApplied = discountSummary?.autoApplied ? [discountSummary.autoApplied] : [];
 
@@ -233,6 +253,7 @@ const finalizePurchase = (userId, cart, subtotal, discountSummary, paymentLabel,
     userId,
     subtotal,
     discount_amount: discountTotal,
+    delivery_fee: deliveryFee,
     final_total: finalTotal,
     payment_method: paymentLabel
   };
@@ -267,6 +288,19 @@ const finalizePurchase = (userId, cart, subtotal, discountSummary, paymentLabel,
         if (remaining === 0) {
           Cart.clear(userId, (clearErr) => {
             if (clearErr) console.error('Error clearing cart after PayPal:', clearErr);
+            if (pricing?.subscription?.is_active && !pricing.subscription.first_delivery_used) {
+              Subscription.markFirstDeliveryUsed(userId).catch((subErr) => {
+                console.error('Error marking first delivery used:', subErr);
+              });
+            }
+            if (pricing?.subscription?.is_active) {
+              const pointsEarned = Math.floor(Number(pricing?.itemsTotal) || 0);
+              if (pointsEarned > 0) {
+                Loyalty.credit(userId, pointsEarned).catch((pointsErr) => {
+                  console.error('Error awarding points:', pointsErr);
+                });
+              }
+            }
             succeedOnce();
           });
         }
@@ -275,17 +309,19 @@ const finalizePurchase = (userId, cart, subtotal, discountSummary, paymentLabel,
   });
 };
 
-const finalizePaypalPurchase = (userId, cart, subtotal, discountSummary, done) => {
-  finalizePurchase(userId, cart, subtotal, discountSummary, 'PayPal', done);
+const finalizePaypalPurchase = (userId, cart, discountSummary, pricing, done) => {
+  finalizePurchase(userId, cart, discountSummary, pricing, 'PayPal', done);
 };
 
-const finalizeNetsPurchase = (userId, cart, subtotal, discountSummary, done) => {
-  finalizePurchase(userId, cart, subtotal, discountSummary, 'NETS QR', done);
+const finalizeNetsPurchase = (userId, cart, discountSummary, pricing, done) => {
+  finalizePurchase(userId, cart, discountSummary, pricing, 'NETS QR', done);
 };
 
 const netsProcessed = new Map();
 const walletTopupProcessed = new Map();
 const walletTopupPending = new Map();
+const subscriptionNetsProcessed = new Map();
+const subscriptionNetsPending = new Map();
 
 const creditWalletTopup = (userId, amount, label, referenceType, referenceId, done) => {
   Wallet.credit(
@@ -309,22 +345,24 @@ app.post('/paypal/create-order', checkAuthenticated, (req, res) => {
     if (!cart || cart.length === 0) return res.status(400).json({ message: 'Cart is empty' });
 
     let discountSummary;
+    let pricing;
     try {
       discountSummary = await discountService.evaluateCartDiscounts(
         userId,
         cart,
         req.session.appliedDiscountCodes || []
       );
+      pricing = await checkoutTotals.computeTotals(userId, discountSummary);
     } catch (discountErr) {
       console.error('Discount evaluation failed:', discountErr);
-      return res.status(500).json({ message: 'Unable to apply discounts' });
+      return res.status(500).json({ message: 'Unable to apply vouchers' });
     }
     if (discountSummary.errors && discountSummary.errors.length > 0) {
       return res.status(400).json({ message: discountSummary.errors.join(' ') });
     }
 
     try {
-      const order = await paypal.createOrder(discountSummary.finalTotal);
+      const order = await paypal.createOrder(pricing.finalTotal);
       res.json(order);
     } catch (err) {
       console.error('PayPal create order failed:', err);
@@ -357,23 +395,23 @@ app.post('/paypal/capture-order', checkAuthenticated, async (req, res) => {
       }
 
       let discountSummary;
+      let pricing;
       try {
         discountSummary = await discountService.evaluateCartDiscounts(
           userId,
           cart,
           req.session.appliedDiscountCodes || []
         );
+        pricing = await checkoutTotals.computeTotals(userId, discountSummary);
       } catch (discountErr) {
-        console.error('Discount evaluation failed:', discountErr);
-        return res.status(500).json({ message: 'Unable to apply discounts' });
+      console.error('Discount evaluation failed:', discountErr);
+      return res.status(500).json({ message: 'Unable to apply vouchers' });
       }
       if (discountSummary.errors && discountSummary.errors.length > 0) {
         return res.status(400).json({ message: discountSummary.errors.join(' ') });
       }
 
-      const subtotal = discountSummary.subtotal;
-
-      finalizePaypalPurchase(userId, cart, subtotal, discountSummary, (finalErr, receiptId) => {
+      finalizePaypalPurchase(userId, cart, discountSummary, pricing, (finalErr, receiptId) => {
         if (finalErr) {
           console.error('PayPal finalize error:', finalErr);
           return res.status(500).json({ message: 'Error finalizing PayPal purchase' });
@@ -428,6 +466,36 @@ app.post('/wallet/paypal/capture-order', checkAuthenticated, async (req, res) =>
   }
 });
 
+// PayPal subscription
+app.post('/subscription/paypal/create-order', checkAuthenticated, async (req, res) => {
+  const amount = roundMoney(Number(process.env.SUBSCRIPTION_PRICE) || 40);
+  try {
+    const order = await paypal.createOrder(amount);
+    res.json(order);
+  } catch (err) {
+    console.error('PayPal subscription create failed:', err);
+    res.status(500).json({ message: 'Unable to create PayPal order' });
+  }
+});
+
+app.post('/subscription/paypal/capture-order', checkAuthenticated, async (req, res) => {
+  const { orderID } = req.body || {};
+  if (!orderID) return res.status(400).json({ message: 'Missing PayPal order ID' });
+  const amount = roundMoney(Number(process.env.SUBSCRIPTION_PRICE) || 40);
+
+  try {
+    const capture = await paypal.captureOrder(orderID);
+    if (!capture || capture.status !== 'COMPLETED') {
+      return res.status(400).json({ message: 'PayPal payment not completed' });
+    }
+    await Subscription.ensureActive(req.session.user.id);
+    res.json({ success: true, redirectUrl: '/subscription?status=active' });
+  } catch (err) {
+    console.error('PayPal subscription capture failed:', err);
+    res.status(500).json({ message: 'Unable to capture PayPal order' });
+  }
+});
+
 // NETS QR routes
 app.post('/nets/create-order', checkAuthenticated, (req, res) => {
   const userId = req.session.user.id;
@@ -444,15 +512,17 @@ app.post('/nets/create-order', checkAuthenticated, (req, res) => {
     }
 
     let discountSummary;
+    let pricing;
     try {
       discountSummary = await discountService.evaluateCartDiscounts(
         userId,
         cart,
         req.session.appliedDiscountCodes || []
       );
+      pricing = await checkoutTotals.computeTotals(userId, discountSummary);
     } catch (discountErr) {
       console.error('Discount evaluation failed:', discountErr);
-      req.flash('error', 'Unable to apply discounts');
+      req.flash('error', 'Unable to apply vouchers');
       return res.redirect('/cart');
     }
     if (discountSummary.errors && discountSummary.errors.length > 0) {
@@ -461,11 +531,11 @@ app.post('/nets/create-order', checkAuthenticated, (req, res) => {
     }
 
     try {
-      const { qrData, fullResponse } = await nets.requestQr(discountSummary.finalTotal.toFixed(2));
+      const { qrData, fullResponse } = await nets.requestQr(pricing.finalTotal.toFixed(2));
       if (qrData.response_code === '00' && Number(qrData.txn_status) === 1 && qrData.qr_code) {
         return res.render('netsQr', {
           user: req.session.user,
-          total: discountSummary.finalTotal.toFixed(2),
+          total: pricing.finalTotal.toFixed(2),
           title: 'Scan to Pay',
           qrCodeUrl: `data:image/png;base64,${qrData.qr_code}`,
           txnRetrievalRef: qrData.txn_retrieval_ref,
@@ -473,7 +543,8 @@ app.post('/nets/create-order', checkAuthenticated, (req, res) => {
           timer: 300,
           fullNetsResponse: fullResponse,
           cartItems: cart,
-          discountSummary
+          discountSummary,
+          pricing
         });
       }
 
@@ -526,6 +597,42 @@ app.post('/wallet/nets/create-order', checkAuthenticated, async (req, res) => {
   }
 });
 
+// NETS QR subscription
+app.post('/subscription/nets/create-order', checkAuthenticated, async (req, res) => {
+  if (!process.env.API_KEY || !process.env.PROJECT_ID) {
+    req.flash('error', 'NETS is not configured. Please contact admin.');
+    return res.redirect('/subscription/checkout');
+  }
+  const amount = roundMoney(Number(process.env.SUBSCRIPTION_PRICE) || 40);
+
+  try {
+    const { qrData, fullResponse } = await nets.requestQr(amount.toFixed(2));
+    if (qrData.response_code === '00' && Number(qrData.txn_status) === 1 && qrData.qr_code) {
+      subscriptionNetsPending.set(qrData.txn_retrieval_ref, { userId: req.session.user.id });
+      return res.render('netsQr', {
+        user: req.session.user,
+        total: amount.toFixed(2),
+        title: 'Scan to Subscribe',
+        qrCodeUrl: `data:image/png;base64,${qrData.qr_code}`,
+        txnRetrievalRef: qrData.txn_retrieval_ref,
+        networkCode: qrData.network_status,
+        timer: 300,
+        fullNetsResponse: fullResponse,
+        topupAmount: amount.toFixed(2),
+        sseUrl: `/subscription/nets/sse/payment-status/${qrData.txn_retrieval_ref}`,
+        successUrl: '/subscription?status=active',
+        failUrl: '/subscription?status=fail'
+      });
+    }
+
+    const errorMsg = qrData.error_message || 'Transaction failed. Please try again.';
+    return res.render('netsTxnFailStatus', { user: req.session.user, message: errorMsg });
+  } catch (err) {
+    console.error('NETS subscription create failed:', err);
+    res.render('netsTxnFailStatus', { user: req.session.user, message: 'Unable to create NETS QR.' });
+  }
+});
+
 app.get('/nets-qr/success', checkAuthenticated, (req, res) => {
   res.render('netsTxnSuccessStatus', { user: req.session.user, message: 'Transaction Successful!' });
 });
@@ -573,15 +680,17 @@ app.get('/nets/sse/payment-status/:txnRetrievalRef', checkAuthenticated, async (
             return res.end();
           }
           let discountSummary;
+          let pricing;
           try {
             discountSummary = await discountService.evaluateCartDiscounts(
               userId,
               cart,
               req.session.appliedDiscountCodes || []
             );
+            pricing = await checkoutTotals.computeTotals(userId, discountSummary);
           } catch (discountErr) {
             console.error('Discount evaluation failed:', discountErr);
-            res.write(`data: ${JSON.stringify({ fail: true, error: 'Unable to apply discounts' })}\n\n`);
+            res.write(`data: ${JSON.stringify({ fail: true, error: 'Unable to apply vouchers' })}\n\n`);
             return res.end();
           }
           if (discountSummary.errors && discountSummary.errors.length > 0) {
@@ -589,9 +698,7 @@ app.get('/nets/sse/payment-status/:txnRetrievalRef', checkAuthenticated, async (
             return res.end();
           }
 
-          const subtotal = discountSummary.subtotal;
-
-          finalizeNetsPurchase(userId, cart, subtotal, discountSummary, (finalErr, receiptId) => {
+          finalizeNetsPurchase(userId, cart, discountSummary, pricing, (finalErr, receiptId) => {
             if (finalErr) {
               console.error('NETS finalize error:', finalErr);
               res.write(`data: ${JSON.stringify({ fail: true, error: 'Error finalizing NETS purchase' })}\n\n`);
@@ -702,9 +809,83 @@ app.get('/wallet/nets/sse/payment-status/:txnRetrievalRef', checkAuthenticated, 
   });
 });
 
+app.get('/subscription/nets/sse/payment-status/:txnRetrievalRef', checkAuthenticated, async (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+
+  const txnRetrievalRef = req.params.txnRetrievalRef;
+  const pending = subscriptionNetsPending.get(txnRetrievalRef);
+  let pollCount = 0;
+  const maxPolls = 60;
+  let frontendTimeoutStatus = 0;
+  let processingSuccess = false;
+
+  if (!pending || pending.userId !== req.session.user.id) {
+    res.write(`data: ${JSON.stringify({ fail: true, redirectUrl: '/subscription?status=fail' })}\n\n`);
+    return res.end();
+  }
+
+  const interval = setInterval(async () => {
+    pollCount += 1;
+    try {
+      const response = await nets.queryStatus(txnRetrievalRef, frontendTimeoutStatus);
+      res.write(`data: ${JSON.stringify(response)}\n\n`);
+
+      const resData = response?.result?.data || {};
+      if (resData.response_code === '00' && Number(resData.txn_status) === 1) {
+        if (processingSuccess) return;
+        processingSuccess = true;
+        clearInterval(interval);
+
+        if (subscriptionNetsProcessed.has(txnRetrievalRef)) {
+          res.write(`data: ${JSON.stringify({ success: true, redirectUrl: '/subscription?status=active' })}\n\n`);
+          return res.end();
+        }
+
+        try {
+          await Subscription.ensureActive(pending.userId);
+          subscriptionNetsProcessed.set(txnRetrievalRef, true);
+          subscriptionNetsPending.delete(txnRetrievalRef);
+          res.write(`data: ${JSON.stringify({ success: true, redirectUrl: '/subscription?status=active' })}\n\n`);
+          return res.end();
+        } catch (err) {
+          console.error('Subscription activation failed:', err);
+          res.write(`data: ${JSON.stringify({ fail: true, redirectUrl: '/subscription?status=fail' })}\n\n`);
+          return res.end();
+        }
+      }
+
+      if (frontendTimeoutStatus === 1 && resData && (resData.response_code !== '00' || Number(resData.txn_status) === 2)) {
+        res.write(`data: ${JSON.stringify({ fail: true, redirectUrl: '/subscription?status=fail' })}\n\n`);
+        clearInterval(interval);
+        return res.end();
+      }
+    } catch (err) {
+      clearInterval(interval);
+      res.write(`data: ${JSON.stringify({ fail: true, redirectUrl: '/subscription?status=fail' })}\n\n`);
+      return res.end();
+    }
+
+    if (pollCount >= maxPolls) {
+      clearInterval(interval);
+      frontendTimeoutStatus = 1;
+      res.write(`data: ${JSON.stringify({ fail: true, redirectUrl: '/subscription?status=fail' })}\n\n`);
+      res.end();
+    }
+  }, 5000);
+
+  req.on('close', () => {
+    clearInterval(interval);
+  });
+});
+
 // Orders
 app.post('/purchase', checkAuthenticated, OrderController.purchase);
 app.get('/purchase-history', checkAuthenticated, OrderController.purchaseHistory);
+app.post('/purchase/received', checkAuthenticated, OrderController.userMarkReceived);
 
 // Payment methods
 app.get('/payment-methods', checkAuthenticated, PaymentMethodController.list);
@@ -714,13 +895,27 @@ app.post('/payment-methods/:id/delete', checkAuthenticated, PaymentMethodControl
 app.get('/wallet', checkAuthenticated, WalletController.showWallet);
 app.post('/wallet/topup', checkAuthenticated, WalletController.topUp);
 app.post('/wallet/refund', checkAuthenticated, checkAdmin, WalletController.refundToWallet);
+app.get('/rewards', checkAuthenticated, LoyaltyController.showRewards);
+app.post('/rewards/redeem', checkAuthenticated, LoyaltyController.redeemVoucher);
+app.get('/subscription', checkAuthenticated, SubscriptionController.showBenefits);
+app.get('/subscription/checkout', checkAuthenticated, SubscriptionController.showCheckout);
+app.post('/subscription/checkout', checkAuthenticated, SubscriptionController.subscribeWithWallet);
+app.post('/subscription/claim', checkAuthenticated, SubscriptionController.claimCoupon);
+app.get('/vouchers/:id', checkAuthenticated, VoucherController.viewVoucher);
+app.post('/refunds/request', checkAuthenticated, RefundController.requestRefund);
 app.get('/receipt/:receiptId', checkAuthenticated, ReceiptController.viewReceipt);
 app.get('/receipt/:receiptId/pdf', checkAuthenticated, ReceiptController.downloadPdf);
 
 // Admin
 app.get('/admin/history', checkAuthenticated, checkAdmin, OrderController.adminViewHistory);
+app.get('/admin/orders', checkAuthenticated, checkAdmin, OrderController.adminProcessing);
+app.post('/admin/orders/complete', checkAuthenticated, checkAdmin, OrderController.adminMarkDelivered);
 app.get('/admin/view-signup', checkAuthenticated, checkAdmin, AdminController.viewRecentUsers);
 app.post('/admin/verify/:id', checkAuthenticated, checkAdmin, AdminController.verifyAdmin);
+app.post('/admin/users/:id/delete', checkAuthenticated, checkAdmin, AdminController.deleteUser);
+app.post('/admin/refunds/:id/approve', checkAuthenticated, checkAdmin, RefundController.approve);
+app.post('/admin/refunds/:id/reject', checkAuthenticated, checkAdmin, RefundController.reject);
+app.get('/admin/refunds', checkAuthenticated, checkAdmin, RefundController.listRequests);
 app.get('/admin/discounts', checkAuthenticated, checkAdmin, DiscountController.list);
 app.get('/admin/discounts/new', checkAuthenticated, checkAdmin, DiscountController.showNew);
 app.post('/admin/discounts', checkAuthenticated, checkAdmin, DiscountController.create);
@@ -728,6 +923,7 @@ app.get('/admin/discounts/:id/edit', checkAuthenticated, checkAdmin, DiscountCon
 app.post('/admin/discounts/:id', checkAuthenticated, checkAdmin, DiscountController.update);
 app.post('/admin/discounts/:id/toggle', checkAuthenticated, checkAdmin, DiscountController.toggle);
 app.post('/admin/discounts/:id/delete', checkAuthenticated, checkAdmin, DiscountController.remove);
+app.post('/admin/loyalty/point-value', checkAuthenticated, checkAdmin, DiscountController.updatePointValue);
 
 // Help
 app.get('/help', (req, res) => {

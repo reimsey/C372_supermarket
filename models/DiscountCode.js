@@ -18,6 +18,28 @@ module.exports = {
     return query(sql);
   },
 
+  async listTemplates() {
+    const sql = `
+      SELECT d.*,
+             (SELECT COUNT(*) FROM discount_code_redemptions r WHERE r.discount_code_id = d.id) AS total_used
+      FROM discount_codes d
+      WHERE d.is_template = 1
+      ORDER BY d.created_at DESC
+    `;
+    return query(sql);
+  },
+
+  async listUserVouchers(userId) {
+    const sql = `
+      SELECT d.*,
+             (SELECT COUNT(*) FROM discount_code_redemptions r WHERE r.discount_code_id = d.id AND r.user_id = ?) AS user_used
+      FROM discount_codes d
+      WHERE d.user_id = ? AND d.is_template = 0 AND d.is_active = 1
+      ORDER BY d.created_at DESC
+    `;
+    return query(sql, [userId, userId]);
+  },
+
   async getById(id) {
     const rows = await query('SELECT * FROM discount_codes WHERE id = ?', [id]);
     return rows[0] || null;
@@ -33,7 +55,7 @@ module.exports = {
     const sql = `
       SELECT *
       FROM discount_codes
-      WHERE auto_apply = 1 AND is_active = 1
+      WHERE auto_apply = 1 AND is_active = 1 AND is_template = 0
       ORDER BY created_at DESC
     `;
     return query(sql);
@@ -43,8 +65,8 @@ module.exports = {
     const sql = `
       INSERT INTO discount_codes
       (code, type, scope, discount_type, discount_value, min_spend, max_discount, starts_at, expires_at,
-       total_usage_limit, per_user_limit, stackable, auto_apply, is_active, description)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       total_usage_limit, per_user_limit, stackable, auto_apply, is_active, description, is_template, user_id, template_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     const params = [
       normalizeCode(data.code),
@@ -61,7 +83,10 @@ module.exports = {
       data.stackable ? 1 : 0,
       data.auto_apply ? 1 : 0,
       data.is_active ? 1 : 0,
-      data.description || null
+      data.description || null,
+      data.is_template ? 1 : 0,
+      data.user_id || null,
+      data.template_id || null
     ];
     const result = await query(sql, params);
     return result.insertId;
@@ -72,7 +97,7 @@ module.exports = {
       UPDATE discount_codes
       SET code = ?, type = ?, scope = ?, discount_type = ?, discount_value = ?, min_spend = ?, max_discount = ?,
           starts_at = ?, expires_at = ?, total_usage_limit = ?, per_user_limit = ?,
-          stackable = ?, auto_apply = ?, is_active = ?, description = ?
+          stackable = ?, auto_apply = ?, is_active = ?, description = ?, is_template = ?
       WHERE id = ?
     `;
     const params = [
@@ -91,13 +116,52 @@ module.exports = {
       data.auto_apply ? 1 : 0,
       data.is_active ? 1 : 0,
       data.description || null,
+      data.is_template ? 1 : 0,
       id
     ];
     return query(sql, params);
   },
 
+  async createUserVoucherFromTemplate(templateId, userId, code) {
+    const template = await this.getById(templateId);
+    if (!template || !template.is_template) return null;
+
+    const payload = {
+      code,
+      type: template.type,
+      scope: template.scope,
+      discount_type: template.discount_type,
+      discount_value: template.discount_value,
+      min_spend: template.min_spend,
+      max_discount: template.max_discount,
+      starts_at: template.starts_at,
+      expires_at: template.expires_at,
+      total_usage_limit: 1,
+      per_user_limit: 1,
+      stackable: 0,
+      auto_apply: 0,
+      is_active: 1,
+      description: template.description,
+      is_template: 0,
+      user_id: userId,
+      template_id: templateId
+    };
+
+    const id = await this.create(payload);
+    return this.getById(id);
+  },
+
   async toggleActive(id, isActive) {
     return query('UPDATE discount_codes SET is_active = ? WHERE id = ?', [isActive ? 1 : 0, id]);
+  },
+
+  async deactivateClaimedByTemplateId(templateId) {
+    const sql = `
+      UPDATE discount_codes
+      SET is_active = 0
+      WHERE template_id = ? AND is_template = 0
+    `;
+    return query(sql, [templateId]);
   },
 
   async remove(id) {

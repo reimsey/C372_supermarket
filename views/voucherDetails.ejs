@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Voucher Details</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="/styles.css" rel="stylesheet">
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <div class="container mt-4">
+    <h2>Voucher Details</h2>
+
+    <% if (errors && errors.length) { %>
+      <div class="alert alert-danger"><%= errors[0] %></div>
+    <% } %>
+    <% if (messages && messages.length) { %>
+      <div class="alert alert-success"><%= messages[0] %></div>
+    <% } %>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted small">Code</div>
+            <div class="fs-5 fw-semibold"><%= voucher.code %></div>
+          </div>
+          <div class="text-end">
+            <div class="text-muted small">Amount</div>
+            <div class="fs-5">$<%= Number(voucher.discount_value || 0).toFixed(2) %></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="fw-semibold mb-2">Terms</div>
+            <div class="mb-2">Scope: <%= voucher.scope === 'item' ? 'Item-specific' : 'General (Cart)' %></div>
+            <div class="mb-2">Minimum spend: $<%= Number(voucher.min_spend || 0).toFixed(2) %></div>
+            <div class="mb-2">Max discount: $<%= Number(voucher.max_discount || 0).toFixed(2) %></div>
+            <div class="mb-2">Expires: <%= voucher.expires_at ? new Date(voucher.expires_at).toLocaleString() : 'No expiry' %></div>
+            <div>Details: <%= voucher.description || '—' %></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="fw-semibold mb-2">Eligible Items</div>
+            <% if (voucher.scope !== 'item') { %>
+              <div class="text-muted">This voucher applies to the whole cart.</div>
+            <% } else if (!products || products.length === 0) { %>
+              <div class="text-muted">No specific items assigned.</div>
+            <% } else { %>
+              <ul class="mb-0">
+                <% products.forEach(function(product) { %>
+                  <li><%= product.productName %> (<%= product.category %>)</li>
+                <% }) %>
+              </ul>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-3">
+      <a class="btn btn-secondary" href="/cart">Back to Cart</a>
+    </div>
+  </div>
+</body>
+</html>

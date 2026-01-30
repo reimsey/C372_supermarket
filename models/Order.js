@@ -12,6 +12,7 @@ module.exports = {
     const sql = `
       SELECT orders.*, products.productName, products.image, products.category,
              receipts.subtotal, receipts.discount_amount, receipts.final_total,
+             receipts.status AS receipt_status, receipts.delivered_at, receipts.completed_at,
              receipts.receipt_id AS receipt_id, receipts.payment_method AS receipt_payment_method,
              receipts.refunded_amount AS refunded_amount, receipts.refunded_at AS refunded_at
       FROM orders
@@ -24,9 +25,10 @@ module.exports = {
   },
   getAllWithUserProduct(callback) {
     const sql = `
-      SELECT orders.*, users.username, users.email, users.contact,
+      SELECT orders.*, users.username, users.email, users.contact, users.is_active AS user_is_active,
              products.productName, products.category,
              receipts.subtotal, receipts.discount_amount, receipts.final_total,
+             receipts.status AS receipt_status, receipts.delivered_at, receipts.completed_at,
              receipts.receipt_id AS receipt_id, receipts.payment_method AS receipt_payment_method,
              receipts.refunded_amount AS refunded_amount, receipts.refunded_at AS refunded_at
       FROM orders

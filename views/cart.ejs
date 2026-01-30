@@ -74,12 +74,19 @@
                 <div>$<%= total.toFixed(2) %></div>
               </div>
               <div class="d-flex justify-content-between text-muted">
-                <div>Discounts</div>
+                <div>Vouchers</div>
                 <div>-$<%= (discountSummary?.totalDiscount || 0).toFixed(2) %></div>
               </div>
+              <div class="d-flex justify-content-between text-muted">
+                <div>Delivery</div>
+                <div>$<%= (pricing?.deliveryFee || 0).toFixed(2) %></div>
+              </div>
+              <% if (pricing?.freeDeliveryReason) { %>
+                <div class="small text-muted mt-1"><%= pricing.freeDeliveryReason %></div>
+              <% } %>
               <div class="d-flex justify-content-between fw-semibold mt-2">
                 <div>Total</div>
-                <div>$<span id="cartTotal" data-total="<%= (discountSummary?.finalTotal || total).toFixed(2) %>"><%= (discountSummary?.finalTotal || total).toFixed(2) %></span></div>
+                <div>$<span id="cartTotal" data-total="<%= (pricing?.finalTotal || discountSummary?.finalTotal || total).toFixed(2) %>"><%= (pricing?.finalTotal || discountSummary?.finalTotal || total).toFixed(2) %></span></div>
               </div>
               <% if ((discountSummary?.applied || []).length > 0 || discountSummary?.autoApplied) { %>
                 <div class="small text-muted mt-2">
@@ -103,17 +110,45 @@
           </div>
 
           <div class="border rounded p-3 mb-3">
-            <div class="fw-semibold mb-2">Vouchers & Coupons</div>
-            <form action="/cart/discounts/apply" method="POST" class="d-flex gap-2">
-              <input type="text" name="code" class="form-control" placeholder="Enter code">
-              <button type="submit" class="btn btn-outline-primary">Apply</button>
-            </form>
+            <div class="fw-semibold mb-2">Your Claimed Vouchers</div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="small text-muted">Points: <%= Number(pointsBalance || 0) %> pts</div>
+              <a class="btn btn-outline-secondary btn-sm" href="/rewards">Redeem points</a>
+            </div>
+            <% if (availableVouchers && availableVouchers.length > 0) { %>
+              <div class="d-flex flex-column gap-2">
+                <% availableVouchers.forEach(function(voucher) { %>
+                  <div class="border rounded p-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                      <div>
+                        <div class="fw-semibold"><%= voucher.code %></div>
+                        <div class="small text-muted">
+                          <%= voucher.scope === 'item' ? 'Item-specific' : 'General' %> ·
+                          $<%= Number(voucher.discount_value || 0).toFixed(2) %> off
+                        </div>
+                        <div class="small text-muted">Min spend: $<%= Number(voucher.min_spend || 0).toFixed(2) %></div>
+                      </div>
+                      <div class="d-flex gap-2">
+                        <a href="/vouchers/<%= voucher.id %>" class="btn btn-outline-secondary btn-sm">Details</a>
+                        <form action="/cart/vouchers/apply" method="POST">
+                          <input type="hidden" name="voucherId" value="<%= voucher.id %>">
+                          <button type="submit" class="btn btn-outline-primary btn-sm">Apply</button>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <div class="text-muted small">No claimed vouchers available.</div>
+            <% } %>
+
             <% if ((discountSummary?.applied || []).length > 0 || discountSummary?.autoApplied) { %>
-              <div class="mt-2 small">
+              <div class="mt-3 small">
                 <% (discountSummary.applied || []).forEach(function(item) { %>
                   <div class="d-flex align-items-center justify-content-between">
                     <div><strong><%= item.code %></strong> -$<%= Number(item.amount).toFixed(2) %></div>
-                    <form action="/cart/discounts/remove" method="POST" class="ms-2">
+                    <form action="/cart/vouchers/remove" method="POST" class="ms-2">
                       <input type="hidden" name="code" value="<%= item.code %>">
                       <button type="submit" class="btn btn-link btn-sm">Remove</button>
                     </form>
@@ -124,7 +159,7 @@
                 <% } %>
               </div>
             <% } else { %>
-              <div class="text-muted small mt-2">No discount applied.</div>
+              <div class="text-muted small mt-2">No voucher applied.</div>
             <% } %>
           </div>
 
@@ -156,11 +191,11 @@
             <input type="hidden" name="payWithWallet" value="1">
             <div class="d-flex align-items-center justify-content-between mb-2">
               <div class="text-muted small">Balance: $<%= (walletBalance || 0).toFixed(2) %></div>
-              <% if ((walletBalance || 0) < (discountSummary?.finalTotal || cartSubtotal || 0)) { %>
+              <% if ((walletBalance || 0) < (pricing?.finalTotal || discountSummary?.finalTotal || cartSubtotal || 0)) { %>
                 <a href="/wallet" class="btn btn-outline-primary btn-sm">Top up wallet</a>
               <% } %>
             </div>
-            <% if ((walletBalance || 0) < (discountSummary?.finalTotal || cartSubtotal || 0)) { %>
+            <% if ((walletBalance || 0) < (pricing?.finalTotal || discountSummary?.finalTotal || cartSubtotal || 0)) { %>
               <div class="small text-muted mb-2">Insufficient balance for this cart total.</div>
             <% } %>
             <button type="submit" class="btn btn-danger w-100" id="walletPurchaseBtn"></button>
@@ -191,7 +226,7 @@
           </div>
 
           <form action="/nets/create-order" method="POST" id="netsPurchaseForm" class="d-none">
-            <input type="hidden" name="cartTotal" value="<%= total.toFixed(2) %>">
+            <input type="hidden" name="cartTotal" value="<%= (pricing?.finalTotal || total).toFixed(2) %>">
             <button type="submit" class="btn btn-danger w-100" id="netsPurchaseBtn">Scan NETS QR to Pay</button>
           </form>
         </div>

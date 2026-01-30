@@ -70,13 +70,20 @@ const validateStacking = (rows) => {
   if (!rows || rows.length <= 1) return { ok: true };
   const hasNonStackable = rows.some(row => !row.stackable);
   if (hasNonStackable) {
-    return { ok: false, message: 'This voucher/coupon cannot be stacked with another.' };
+    return { ok: false, message: 'This voucher cannot be stacked with another.' };
   }
   return { ok: true };
 };
 
-const evaluateCodeForCart = async (row, userId, cart, subtotal) => {
+const evaluateCodeForCart = async (row, userId, cart, subtotal, options = {}) => {
   if (!row || !row.is_active) return { eligible: false, reason: 'Voucher is inactive.' };
+  if (row.is_template) return { eligible: false, reason: 'Voucher template cannot be redeemed directly.' };
+  if (row.user_id && Number(row.user_id) !== Number(userId)) {
+    return { eligible: false, reason: 'Voucher is not assigned to your account.' };
+  }
+  if (!row.user_id && !options.allowPublic) {
+    return { eligible: false, reason: 'Voucher is not available for your account.' };
+  }
   if (!isWithinDates(row)) return { eligible: false, reason: 'Voucher is expired or not active yet.' };
 
   const usage = await DiscountCode.getUsageCounts(row.id, userId);
@@ -108,7 +115,7 @@ const evaluateCodeForCart = async (row, userId, cart, subtotal) => {
   return { eligible: true, amount, eligibleSubtotal };
 };
 
-const evaluateCartDiscounts = async (userId, cart, requestedCodes = []) => {
+const evaluateCartDiscounts = async (userId, cart, requestedCodes = [], options = {}) => {
   const subtotal = computeSubtotalFromCart(cart);
   const normalizedCodes = normalizeCodes(requestedCodes);
   const applied = [];
@@ -130,7 +137,7 @@ const evaluateCartDiscounts = async (userId, cart, requestedCodes = []) => {
     errors.push(stackingCheck.message);
   } else {
     for (const row of validRows) {
-      const eligibility = await evaluateCodeForCart(row, userId, cart, subtotal);
+      const eligibility = await evaluateCodeForCart(row, userId, cart, subtotal, options);
       if (!eligibility.eligible) {
         errors.push(`${row.code}: ${eligibility.reason}`);
         continue;
@@ -153,7 +160,7 @@ const evaluateCartDiscounts = async (userId, cart, requestedCodes = []) => {
   const autoEvaluated = [];
   for (const row of autoCandidates) {
     if (applied.some(code => code.id === row.id)) continue;
-    const eligibility = await evaluateCodeForCart(row, userId, cart, subtotal);
+    const eligibility = await evaluateCodeForCart(row, userId, cart, subtotal, options);
     if (!eligibility.eligible) continue;
     autoEvaluated.push({
       row,

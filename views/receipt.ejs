@@ -64,7 +64,8 @@
 
     <div class="text-end">
       <div>Subtotal: $<%= Number(receipt.subtotal).toFixed(2) %></div>
-      <div>Discounts: -$<%= Number(receipt.discount_amount).toFixed(2) %></div>
+      <div>Vouchers: -$<%= Number(receipt.discount_amount).toFixed(2) %></div>
+      <div>Delivery: $<%= Number(receipt.delivery_fee || 0).toFixed(2) %></div>
       <% if (discounts && discounts.length > 0) { %>
         <div class="small text-muted">
           <% discounts.forEach(function(discount, idx) { %>
@@ -73,6 +74,30 @@
         </div>
       <% } %>
       <div class="fw-bold">Final Paid: $<%= Number(receipt.final_total).toFixed(2) %></div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-body">
+        <h5 class="mb-2">Refund</h5>
+        <% if ((receipt.refunded_amount || 0) > 0) { %>
+          <div class="text-muted">Refunded: $<%= Number(receipt.refunded_amount).toFixed(2) %></div>
+        <% } else if (refundRequest && refundRequest.status === 'pending') { %>
+          <div class="text-muted">Refund request pending approval.</div>
+        <% } else if (refundRequest && refundRequest.status === 'rejected') { %>
+          <div class="text-muted">Refund request rejected.</div>
+        <% } else if (receipt.status !== 'completed') { %>
+          <div class="text-muted">Refunds are available after order completion.</div>
+        <% } else { %>
+          <form action="/refunds/request" method="POST" class="mt-2">
+            <input type="hidden" name="receipt_id" value="<%= receipt.receipt_id %>">
+            <div class="mb-2">
+              <label class="form-label">Reason (optional)</label>
+              <input type="text" name="reason" class="form-control" placeholder="Reason for refund">
+            </div>
+            <button type="submit" class="btn btn-outline-warning">Request Refund</button>
+          </form>
+        <% } %>
+      </div>
     </div>
   </div>
 </body>
