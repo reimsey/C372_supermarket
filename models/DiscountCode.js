@@ -148,6 +148,10 @@ module.exports = {
     };
 
     const id = await this.create(payload);
+    if (template.scope === 'item') {
+      const productIds = await this.listProductIds(templateId);
+      await this.setProducts(id, productIds);
+    }
     return this.getById(id);
   },
 

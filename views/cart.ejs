@@ -123,7 +123,7 @@
                       <div>
                         <div class="fw-semibold"><%= voucher.code %></div>
                         <div class="small text-muted">
-                          <%= voucher.scope === 'item' ? 'Item-specific' : 'General' %> ·
+                          General ·
                           $<%= Number(voucher.discount_value || 0).toFixed(2) %> off
                         </div>
                         <div class="small text-muted">Min spend: $<%= Number(voucher.min_spend || 0).toFixed(2) %></div>

@@ -22,17 +22,6 @@
     <form action="<%= isEdit ? '/admin/discounts/' + form.id : '/admin/discounts' %>" method="POST">
       <div class="row g-3">
         <div class="col-md-4">
-          <label class="form-label">Code</label>
-          <input name="code" class="form-control" required value="<%= form.code || '' %>">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Scope</label>
-          <select name="scope" id="scopeField" class="form-select" required>
-            <option value="general" <%= form.scope === 'general' ? 'selected' : '' %>>General (Cart)</option>
-            <option value="item" <%= form.scope === 'item' ? 'selected' : '' %>>Item-specific</option>
-          </select>
-        </div>
-        <div class="col-md-4">
           <label class="form-label">Voucher Amount</label>
           <input name="discount_value" type="number" step="0.01" min="0" class="form-control" required value="<%= form.discount_value || '' %>">
         </div>
@@ -59,25 +48,7 @@
           </div>
         </div>
 
-        <div class="col-12" id="productPicker">
-          <label class="form-label">Eligible Products (item-specific only)</label>
-          <div class="row">
-            <% const grouped = {}; (products || []).forEach(function(p) { if (!grouped[p.category]) grouped[p.category] = []; grouped[p.category].push(p); }); %>
-            <% Object.keys(grouped).forEach(function(category) { %>
-              <div class="col-md-6 mb-2">
-                <div class="fw-semibold"><%= category %></div>
-                <% grouped[category].forEach(function(product) { %>
-                  <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="productIds" value="<%= product.id %>" id="prod-<%= product.id %>" <%= selectedProducts.includes(product.id) ? 'checked' : '' %>>
-                    <label class="form-check-label" for="prod-<%= product.id %>">
-                      <%= product.productName %>
-                    </label>
-                  </div>
-                <% }) %>
-              </div>
-            <% }) %>
-          </div>
-        </div>
+        <input type="hidden" name="scope" value="general">
       </div>
 
       <div class="mt-4 d-flex gap-2">
@@ -87,17 +58,5 @@
     </form>
   </div>
 
-  <script>
-    const scopeField = document.getElementById('scopeField');
-    const productPicker = document.getElementById('productPicker');
-
-    const toggleProducts = () => {
-      if (!scopeField || !productPicker) return;
-      productPicker.classList.toggle('d-none', scopeField.value !== 'item');
-    };
-
-    scopeField.addEventListener('change', toggleProducts);
-    toggleProducts();
-  </script>
 </body>
 </html>

@@ -96,8 +96,8 @@ const evaluateCodeForCart = async (row, userId, cart, subtotal, options = {}) =>
 
   let eligibleSubtotal = subtotal;
   if (row.scope === 'item') {
-    const productIds = await DiscountCode.listProductIds(row.id);
-    eligibleSubtotal = computeEligibleSubtotal(cart, productIds);
+    // Item-specific vouchers are deprecated; treat as general.
+    eligibleSubtotal = subtotal;
   }
 
   if (eligibleSubtotal <= 0) {

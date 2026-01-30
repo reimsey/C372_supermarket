@@ -1,6 +1,6 @@
 const DiscountCode = require('../models/DiscountCode');
-const Product = require('../models/Product');
 const LoyaltySettings = require('../models/LoyaltySettings');
+const crypto = require('crypto');
 
 const parseBool = (value) => value === '1' || value === 'on' || value === true;
 
@@ -18,9 +18,8 @@ const parseDate = (value) => {
 };
 
 const buildPayload = (body) => ({
-  code: body.code,
   type: body.type,
-  scope: body.scope,
+  scope: 'general',
   discount_type: body.discount_type,
   discount_value: parseNumber(body.discount_value, 0),
   min_spend: parseNumber(body.min_spend, 0),
@@ -35,10 +34,15 @@ const buildPayload = (body) => ({
   description: body.description
 });
 
-const normalizeProductIds = (value) => {
-  if (!value) return [];
-  const list = Array.isArray(value) ? value : [value];
-  return list.map(id => parseInt(id, 10)).filter(Boolean);
+const generateCode = async () => {
+  for (let i = 0; i < 5; i += 1) {
+    const code = `VCH-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    // Ensure uniqueness
+    // eslint-disable-next-line no-await-in-loop
+    const existing = await DiscountCode.getByCode(code);
+    if (!existing) return code;
+  }
+  return `VCH-${Date.now()}`;
 };
 
 module.exports = {
@@ -63,14 +67,9 @@ module.exports = {
 
   async showNew(req, res) {
     try {
-      const products = await new Promise((resolve, reject) => {
-        Product.getAll((err, rows) => (err ? reject(err) : resolve(rows || [])));
-      });
       res.render('adminDiscountForm', {
         user: req.session.user,
-        products,
         form: {},
-        selectedProducts: [],
         isEdit: false,
         messages: req.flash('success'),
         errors: req.flash('error')
@@ -84,17 +83,14 @@ module.exports = {
   async create(req, res) {
     try {
       const payload = buildPayload(req.body);
+      payload.code = await generateCode();
       payload.type = 'voucher';
       payload.discount_type = 'fixed';
       payload.stackable = false;
       payload.auto_apply = false;
       payload.is_template = true;
       payload.user_id = null;
-      const productIds = normalizeProductIds(req.body.productIds);
       const id = await DiscountCode.create(payload);
-      if (payload.scope === 'item') {
-        await DiscountCode.setProducts(id, productIds);
-      }
       req.flash('success', 'Voucher created');
       res.redirect('/admin/discounts');
     } catch (err) {
@@ -108,15 +104,9 @@ module.exports = {
     try {
       const code = await DiscountCode.getById(req.params.id);
       if (!code || !code.is_template) return res.status(404).send('Voucher not found');
-      const products = await new Promise((resolve, reject) => {
-        Product.getAll((err, rows) => (err ? reject(err) : resolve(rows || [])));
-      });
-      const selectedProducts = await DiscountCode.listProductIds(code.id);
       res.render('adminDiscountForm', {
         user: req.session.user,
-        products,
         form: code,
-        selectedProducts,
         isEdit: true,
         messages: req.flash('success'),
         errors: req.flash('error')
@@ -129,19 +119,16 @@ module.exports = {
 
   async update(req, res) {
     try {
+      const existing = await DiscountCode.getById(req.params.id);
+      if (!existing || !existing.is_template) return res.status(404).send('Voucher not found');
       const payload = buildPayload(req.body);
+      payload.code = existing.code;
       payload.type = 'voucher';
       payload.discount_type = 'fixed';
       payload.stackable = false;
       payload.auto_apply = false;
       payload.is_template = true;
-      const productIds = normalizeProductIds(req.body.productIds);
       await DiscountCode.update(req.params.id, payload);
-      if (payload.scope === 'item') {
-        await DiscountCode.setProducts(req.params.id, productIds);
-      } else {
-        await DiscountCode.setProducts(req.params.id, []);
-      }
       req.flash('success', 'Voucher updated');
       res.redirect('/admin/discounts');
     } catch (err) {
